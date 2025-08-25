@@ -397,18 +397,25 @@ export const useShowsStore = defineStore('shows', () => {
     return { success: false, error: 'Show date not found' }
   }
 
-  const getAvailabilityMatrix = (team: 'Samurai' | 'Gladiator' | 'Viking') => {
+  const getAvailabilityMatrix = async (team: 'Samurai' | 'Gladiator' | 'Viking') => {
     const teamShows = showsByTeam.value(team)
     const teamShowDates = showDates.value.filter(date => {
       const show = shows.value.find(s => s.id === date.show_id)
       return show && show.team === team
     })
     
-    // This would need to be fetched from the user store
-    // For now, return empty array - you'll need to integrate with user store
-    const teamMembers: any[] = []
+    // Get team members from user store
+    const { useUserStore } = await import('./user')
+    const userStore = useUserStore()
+    
+    const teamMembersResult = await userStore.getUsersByTeam(team)
+    if (!teamMembersResult.success) {
+      return { success: false, error: teamMembersResult.error, matrix: [] }
+    }
+    
+    const teamMembers = teamMembersResult.users
 
-    return teamMembers.map(member => {
+    const matrix = teamMembers.map(member => {
       const showDates = teamShowDates.map(showDate => ({
         showDateId: showDate.id,
         showId: showDate.show_id,
@@ -424,6 +431,8 @@ export const useShowsStore = defineStore('shows', () => {
         showDates
       }
     })
+    
+    return { success: true, matrix }
   }
 
   const refreshData = async () => {

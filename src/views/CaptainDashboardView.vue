@@ -84,6 +84,38 @@
 
       <!-- Show Management -->
       <div v-if="activeTab === 'shows'" class="tab-content">
+        <div class="availability-matrix">
+          <h3>Availability Matrix</h3>
+          <div class="matrix-container">
+            <table class="attendance-table">
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th v-for="showDate in allTeamShowDates" :key="showDate.id">
+                    {{ getShowName(showDate.show_id) }} - {{ formatDate(showDate.date) }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="member in availabilityMatrix" :key="member.userId">
+                  <td class="member-name">{{ member.userName }}</td>
+                  <td 
+                    v-for="showDate in member.showDates" 
+                    :key="showDate.showDateId"
+                    :class="[
+                      'attendance-cell',
+                      `status-${showDate.status}`
+                    ]"
+                    @click="toggleShowAvailability(member.userId, showDate.showDateId, showDate.status)"
+                  >
+                    {{ getStatusLabel(showDate.status) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div class="section-header">
           <h2>Shows</h2>
           <button @click="showCreateShowModal = true" class="primary-button">
@@ -122,38 +154,6 @@
                 Delete
               </button>
             </div>
-          </div>
-        </div>
-
-        <div class="availability-matrix">
-          <h3>Availability Matrix</h3>
-          <div class="matrix-container">
-            <table class="attendance-table">
-              <thead>
-                <tr>
-                  <th>Member</th>
-                  <th v-for="showDate in allTeamShowDates" :key="showDate.id">
-                    {{ getShowName(showDate.showId) }} - {{ formatDate(showDate.date) }}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="member in availabilityMatrix" :key="member.userId">
-                  <td class="member-name">{{ member.userName }}</td>
-                  <td 
-                    v-for="showDate in member.showDates" 
-                    :key="showDate.showDateId"
-                    :class="[
-                      'attendance-cell',
-                      `status-${showDate.status}`
-                    ]"
-                    @click="toggleShowAvailability(member.userId, showDate.showDateId, showDate.status)"
-                  >
-                    {{ getStatusLabel(showDate.status) }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
           </div>
         </div>
       </div>
@@ -414,7 +414,7 @@ const teamShows = computed(() => {
 
 const allTeamShowDates = computed(() => {
   return showsStore.showDates.filter(showDate => {
-    const show = showsStore.shows.find(s => s.id === showDate.showId)
+    const show = showsStore.shows.find(s => s.id === showDate.show_id)
     return show && show.team === userStore.currentTeam
   })
 })
@@ -598,6 +598,9 @@ const createShowDate = async () => {
     userStore.user?.id || ''
   )
   
+  // Refresh matrix data to reflect the new show date
+  await refreshMatrixData()
+  
   newShowDate.value = { date: '' }
   selectedShow.value = null
   showCreateShowDateModal.value = false
@@ -623,6 +626,9 @@ const updateShowDate = async () => {
     updateShowDateData.value.date,
     userStore.user?.id || ''
   )
+  
+  // Refresh matrix data to reflect the update
+  await refreshMatrixData()
   
   updateShowDateData.value = { date: '' }
   selectedShow.value = null
@@ -651,6 +657,8 @@ const deleteShow = async (showId: string) => {
 const deleteShowDate = async (showDateId: string) => {
   if (confirm('Are you sure you want to delete this show date?')) {
     await showsStore.deleteShowDate(showDateId)
+    // Refresh matrix data to reflect the deleted show date
+    await refreshMatrixData()
   }
 }
 
@@ -700,6 +708,8 @@ const toggleAttendance = async (userId: string, sessionId: string, currentStatus
 const toggleShowAvailability = async (userId: string, showDateId: string, currentStatus: string) => {
   const nextStatus = getNextStatus(currentStatus)
   await showsStore.updateAvailability(userId, showDateId, nextStatus)
+  // Refresh matrix data to reflect the availability update
+  await refreshMatrixData()
 }
 
 const getNextStatus = (currentStatus: string) => {
@@ -953,6 +963,7 @@ onMounted(async () => {
 
 .attendance-matrix, .availability-matrix {
   margin-top: 30px;
+  margin-bottom: 40px;
 }
 
 .attendance-matrix h3, .availability-matrix h3 {

@@ -376,9 +376,14 @@ const attendanceMatrix = computed(() => {
   return coachingStore.getAttendanceMatrix(userStore.currentTeam || 'Samurai')
 })
 
-const availabilityMatrix = computed(() => {
-  return showsStore.getAvailabilityMatrix(userStore.currentTeam || 'Samurai')
-})
+const availabilityMatrix = ref<any[]>([])
+
+const loadAvailabilityMatrix = async () => {
+  const result = await showsStore.getAvailabilityMatrix(userStore.currentTeam || 'Samurai')
+  if (result.success) {
+    availabilityMatrix.value = result.matrix
+  }
+}
 
 const availableMembers = computed(() => {
   // Mock team members - in a real app, this would come from a user store
@@ -603,10 +608,14 @@ const saveMemberAssignments = async () => {
   showAssignMembersModal.value = false
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (!userStore.isAuthenticated || !userStore.canAccessAdmin) {
     router.push('/login')
+    return
   }
+  
+  // Load availability matrix
+  await loadAvailabilityMatrix()
 })
 </script>
 
