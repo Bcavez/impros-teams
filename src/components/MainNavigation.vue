@@ -14,6 +14,32 @@
         </div>
         
         <div class="nav-actions">
+          <button 
+            v-if="userStore.isCaptain || userStore.isAdmin"
+            @click="handleRefresh" 
+            class="nav-button refresh-button"
+            :disabled="isRefreshing"
+            :title="isRefreshing ? 'Refreshing...' : 'Refresh Data'"
+          >
+            <svg 
+              class="nav-icon" 
+              :class="{ 'spinning': isRefreshing }"
+              width="16" 
+              height="16" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor" 
+              stroke-width="2" 
+              stroke-linecap="round" 
+              stroke-linejoin="round"
+            >
+              <path d="M23 4v6h-6"/>
+              <path d="M1 20v-6h6"/>
+              <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+            </svg>
+            <span class="button-text">{{ isRefreshing ? 'Refreshing...' : 'Refresh' }}</span>
+          </button>
+          
           <!-- Back to Dashboard button (when not on dashboard) -->
           <router-link
             v-if="!isOnDashboardPage"
@@ -22,17 +48,6 @@
           >
             📊 Dashboard
           </router-link>
-          
-          <button 
-            v-if="userStore.isCaptain || userStore.isAdmin"
-            @click="handleRefresh" 
-            class="nav-button refresh-button"
-            :disabled="isRefreshing"
-            :title="isRefreshing ? 'Refreshing...' : 'Refresh Data'"
-          >
-            {{ isRefreshing ? '🔄' : '🔄' }}
-            <span class="button-text">{{ isRefreshing ? 'Refreshing...' : 'Refresh' }}</span>
-          </button>
           
           <router-link
             v-if="userStore.isAdmin && !isOnAdminPage"
@@ -47,11 +62,41 @@
             to="/captain"
             class="nav-button captain-button"
           >
-            ⚡ <span class="button-text">Captain</span>
+            <svg 
+              class="nav-icon" 
+              width="16" 
+              height="16" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor" 
+              stroke-width="2" 
+              stroke-linecap="round" 
+              stroke-linejoin="round"
+            >
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+              <path d="M2 17l10 5 10-5"/>
+              <path d="M2 12l10 5 10-5"/>
+            </svg>
+            <span class="button-text">Captain</span>
           </router-link>
           
           <button @click="handleLogout" class="nav-button logout-button" title="Logout">
-            🚪 <span class="button-text">Logout</span>
+            <svg 
+              class="nav-icon" 
+              width="16" 
+              height="16" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor" 
+              stroke-width="2" 
+              stroke-linecap="round" 
+              stroke-linejoin="round"
+            >
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16,17 21,12 16,7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            <span class="button-text">Logout</span>
           </button>
         </div>
       </div>
@@ -202,6 +247,23 @@ const handleLogout = () => {
   white-space: nowrap;
 }
 
+.nav-icon {
+  flex-shrink: 0;
+}
+
+.nav-icon.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .button-text {
   display: inline;
 }
@@ -283,6 +345,11 @@ const handleLogout = () => {
   .nav-button {
     padding: 6px 12px;
     font-size: 13px;
+  }
+  
+  .nav-icon {
+    width: 14px;
+    height: 14px;
   }
   
   .nav-actions {
