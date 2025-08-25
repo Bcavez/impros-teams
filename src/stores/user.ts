@@ -16,6 +16,70 @@ export const useUserStore = defineStore('user', () => {
   const isAuthenticated = ref(false)
   const allUsers = ref<User[]>([])
 
+  // Persistent authentication functions
+  const saveAuthState = (userData: User) => {
+    try {
+      localStorage.setItem('auth_user', JSON.stringify(userData))
+      localStorage.setItem('auth_authenticated', 'true')
+    } catch (error) {
+      console.error('Failed to save auth state:', error)
+    }
+  }
+
+  const loadAuthState = async () => {
+    try {
+      const savedUser = localStorage.getItem('auth_user')
+      const isAuth = localStorage.getItem('auth_authenticated')
+      
+      if (savedUser && isAuth === 'true') {
+        const userData = JSON.parse(savedUser)
+        user.value = userData
+        isAuthenticated.value = true
+        
+        // Initialize stores after restoring authentication state
+        console.log('🔄 Initializing stores after auth state restore...')
+        const { useCoachingStore } = await import('./coaching')
+        const { useShowsStore } = await import('./shows')
+        
+        const coachingStore = useCoachingStore()
+        const showsStore = useShowsStore()
+        
+        await Promise.all([
+          coachingStore.fetchCoachingSessions(undefined, true),
+          coachingStore.fetchAttendanceRecords(undefined, true),
+          showsStore.fetchShows(true),
+          showsStore.fetchShowDates(true),
+          showsStore.fetchShowAssignments(true),
+          showsStore.fetchShowAvailability(true)
+        ])
+        
+        // Cache team members for the user's team
+        const teamMembersResult = await getUsersByTeam(userData.team || 'Samurai')
+        if (teamMembersResult.success) {
+          const teamMembersCacheKey = `team_members_${userData.team}`
+          sessionStorage.setItem(teamMembersCacheKey, JSON.stringify(teamMembersResult.users))
+        }
+        
+        sessionStorage.setItem('stores_initialized', 'true')
+        
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error('Failed to load auth state:', error)
+      return false
+    }
+  }
+
+  const clearAuthState = () => {
+    try {
+      localStorage.removeItem('auth_user')
+      localStorage.removeItem('auth_authenticated')
+    } catch (error) {
+      console.error('Failed to clear auth state:', error)
+    }
+  }
+
   // Computed properties
   const isAdmin = computed(() => user.value?.role === 'admin')
   const isCaptain = computed(() => user.value?.role === 'captain' || user.value?.is_captain)
@@ -50,6 +114,7 @@ export const useUserStore = defineStore('user', () => {
       if (isPasswordValid) {
         user.value = data
         isAuthenticated.value = true
+        saveAuthState(data) // Save authentication state
         return { success: true, user: data }
       } else {
         return { success: false, error: 'Invalid credentials' }
@@ -62,6 +127,7 @@ export const useUserStore = defineStore('user', () => {
   const logout = () => {
     user.value = null
     isAuthenticated.value = false
+    clearAuthState() // Clear persistent authentication state
     
     // Clear all cache when user logs out
     import('./coaching').then(({ useCoachingStore }) => {
@@ -102,6 +168,7 @@ export const useUserStore = defineStore('user', () => {
       if (data) {
         user.value = data
         isAuthenticated.value = true
+        saveAuthState(data) // Save authentication state
         return { success: true, user: data }
       }
 
@@ -130,6 +197,7 @@ export const useUserStore = defineStore('user', () => {
 
       if (data) {
         user.value = data
+        saveAuthState(data) // Update saved authentication state
         return { success: true, user: data }
       }
 
@@ -188,6 +256,7 @@ export const useUserStore = defineStore('user', () => {
       // Update current user if it's the same user
       if (user.value?.id === userId) {
         user.value = data
+        saveAuthState(data) // Update saved authentication state
       }
 
       return { success: true, user: data }
@@ -263,6 +332,7 @@ export const useUserStore = defineStore('user', () => {
       // Update current user if it's the same user
       if (user.value?.id === userId) {
         user.value = data
+        saveAuthState(data) // Update saved authentication state
       }
 
       return { success: true, user: data }
@@ -317,6 +387,9 @@ export const useUserStore = defineStore('user', () => {
     getUsersByTeam,
     getAllUsers,
     updateUserRole,
-    deleteUser
+    deleteUser,
+    
+    // Persistent auth
+    loadAuthState
   }
 }) 
