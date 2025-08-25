@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { supabase } from '@/lib/supabase'
 import type { Database } from '@/lib/supabase'
+import { hashPassword, comparePassword, isBcryptHash, validatePassword } from '@/lib/password-utils'
 
 type User = Database['public']['Tables']['users']['Row']
 
@@ -23,19 +24,29 @@ export const useUserStore = defineStore('user', () => {
   // Actions
   const login = async (email: string, password: string) => {
     try {
-      // For now, we'll use a simple email lookup since we haven't set up auth yet
-      // In a real implementation, you'd use Supabase Auth
+      // Get user by email
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('email', email)
         .single()
 
-      if (error) {
+      if (error || !data) {
         return { success: false, error: 'Invalid credentials' }
       }
 
-      if (data) {
+      // Check if user has a bcrypt hash or legacy plain text
+      let isPasswordValid = false
+      
+      if (isBcryptHash(data.password_hash)) {
+        // User has bcrypt hash - compare with bcrypt
+        isPasswordValid = await comparePassword(password, data.password_hash)
+      } else {
+        // Legacy plain text password - check directly (for backward compatibility)
+        isPasswordValid = data.password_hash === password || data.password_hash === 'default_password_hash'
+      }
+
+      if (isPasswordValid) {
         user.value = data
         isAuthenticated.value = true
         return { success: true, user: data }
@@ -54,9 +65,13 @@ export const useUserStore = defineStore('user', () => {
 
   const register = async (name: string, email: string, password: string) => {
     try {
+      // Hash the password with bcrypt
+      const hashedPassword = await hashPassword(password)
+      
       const newUser = {
         name,
         email,
+        password_hash: hashedPassword, // Store the hashed password
         role: 'member' as const,
         team: null,
         is_captain: false

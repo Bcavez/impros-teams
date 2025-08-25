@@ -42,4 +42,15 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     },
   },
+  server: {
+    headers: {
+      // Security headers to prevent indexing and improve security
+      'X-Robots-Tag': 'noindex, nofollow, noarchive, nosnippet, noimageindex',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'X-XSS-Protection': '1; mode=block',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
+    }
+  }
 })

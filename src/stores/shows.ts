@@ -1,230 +1,87 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { supabase } from '@/lib/supabase'
+import type { Database } from '@/lib/supabase'
 
-export interface Show {
-  id: string
-  name: string
-  createdBy: string
-  createdAt: string
-  team: 'Samurai' | 'Gladiator' | 'Viking'
-}
-
-export interface ShowDate {
-  id: string
-  showId: string
-  date: string
-  assignedMembers: string[]
-  maxMembers: number
-  createdBy: string
-  createdAt: string
-}
-
-export interface ShowAvailability {
-  userId: string
-  showDateId: string
-  status: 'absent' | 'present' | 'undecided'
-  updatedAt: string
-}
+type Show = Database['public']['Tables']['shows']['Row']
+type ShowDate = Database['public']['Tables']['show_dates']['Row']
+type ShowAvailability = Database['public']['Tables']['show_availability']['Row']
+type ShowAssignment = Database['public']['Tables']['show_assignments']['Row']
 
 export const useShowsStore = defineStore('shows', () => {
   const shows = ref<Show[]>([])
   const showDates = ref<ShowDate[]>([])
   const availabilityRecords = ref<ShowAvailability[]>([])
+  const showAssignments = ref<ShowAssignment[]>([])
 
-  // Mock data for demo
-  const mockShows: Show[] = [
-    {
-      id: '1',
-      name: 'Winter Performance',
-      createdBy: '2',
-      createdAt: '2024-01-01T10:00:00Z',
-      team: 'Samurai'
-    },
-    {
-      id: '2',
-      name: 'Spring Festival',
-      createdBy: '3',
-      createdAt: '2024-01-05T10:00:00Z',
-      team: 'Gladiator'
-    },
-    {
-      id: '3',
-      name: 'Summer Spectacular',
-      createdBy: '2',
-      createdAt: '2024-01-15T10:00:00Z',
-      team: 'Samurai'
-    },
-    {
-      id: '4',
-      name: 'Autumn Showcase',
-      createdBy: '3',
-      createdAt: '2024-01-20T10:00:00Z',
-      team: 'Gladiator'
-    },
-    {
-      id: '5',
-      name: 'Viking Conquest',
-      createdBy: '4',
-      createdAt: '2024-01-25T10:00:00Z',
-      team: 'Viking'
-    },
-    {
-      id: '6',
-      name: 'Holiday Special',
-      createdBy: '2',
-      createdAt: '2024-02-01T10:00:00Z',
-      team: 'Samurai'
+  // Initialize store with data from Supabase
+  const initializeStore = async () => {
+    try {
+      await Promise.all([
+        fetchShows(),
+        fetchShowDates(),
+        fetchShowAssignments(),
+        fetchShowAvailability()
+      ])
+    } catch (error) {
+      console.error('Failed to initialize shows store:', error)
     }
-  ]
+  }
 
-  const mockShowDates: ShowDate[] = [
-    {
-      id: '1',
-      showId: '1',
-      date: '2025-02-15',
-      assignedMembers: ['5', '6'],
-      maxMembers: 5,
-      createdBy: '2',
-      createdAt: '2024-01-10T10:00:00Z'
-    },
-    {
-      id: '2',
-      showId: '2',
-      date: '2025-03-20',
-      assignedMembers: ['7'],
-      maxMembers: 5,
-      createdBy: '3',
-      createdAt: '2024-01-12T10:00:00Z'
-    },
-    {
-      id: '3',
-      showId: '3',
-      date: '2025-06-15',
-      assignedMembers: ['5'],
-      maxMembers: 5,
-      createdBy: '2',
-      createdAt: '2024-01-15T10:00:00Z'
-    },
-    {
-      id: '4',
-      showId: '4',
-      date: '2025-09-10',
-      assignedMembers: ['7'],
-      maxMembers: 5,
-      createdBy: '3',
-      createdAt: '2024-01-20T10:00:00Z'
-    },
-    {
-      id: '5',
-      showId: '5',
-      date: '2025-07-04',
-      assignedMembers: ['8'],
-      maxMembers: 5,
-      createdBy: '4',
-      createdAt: '2024-01-25T10:00:00Z'
-    },
-    {
-      id: '6',
-      showId: '6',
-      date: '2025-12-20',
-      assignedMembers: ['5', '6'],
-      maxMembers: 5,
-      createdBy: '2',
-      createdAt: '2024-02-01T10:00:00Z'
-    },
-    {
-      id: '7',
-      showId: '1',
-      date: '2024-12-15',
-      assignedMembers: ['5', '6'],
-      maxMembers: 5,
-      createdBy: '2',
-      createdAt: '2024-11-10T10:00:00Z'
-    },
-    {
-      id: '8',
-      showId: '2',
-      date: '2024-11-20',
-      assignedMembers: ['7'],
-      maxMembers: 5,
-      createdBy: '3',
-      createdAt: '2024-10-12T10:00:00Z'
+  // Fetch functions
+  const fetchShows = async () => {
+    const { data, error } = await supabase
+      .from('shows')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching shows:', error)
+      return
     }
-  ]
 
-  const mockAvailability: ShowAvailability[] = [
-    {
-      userId: '5',
-      showDateId: '1',
-      status: 'present',
-      updatedAt: '2024-01-14T15:30:00Z'
-    },
-    {
-      userId: '6',
-      showDateId: '1',
-      status: 'undecided',
-      updatedAt: '2024-01-13T09:15:00Z'
-    },
-    {
-      userId: '7',
-      showDateId: '2',
-      status: 'present',
-      updatedAt: '2024-01-16T14:20:00Z'
-    },
-    {
-      userId: '5',
-      showDateId: '3',
-      status: 'absent',
-      updatedAt: '2024-01-18T11:45:00Z'
-    },
-    {
-      userId: '7',
-      showDateId: '4',
-      status: 'undecided',
-      updatedAt: '2024-01-22T16:30:00Z'
-    },
-    {
-      userId: '8',
-      showDateId: '5',
-      status: 'present',
-      updatedAt: '2024-01-26T13:15:00Z'
-    },
-    {
-      userId: '5',
-      showDateId: '6',
-      status: 'present',
-      updatedAt: '2024-02-03T10:00:00Z'
-    },
-    {
-      userId: '6',
-      showDateId: '6',
-      status: 'undecided',
-      updatedAt: '2024-02-03T10:30:00Z'
-    },
-    {
-      userId: '5',
-      showDateId: '7',
-      status: 'present',
-      updatedAt: '2024-12-14T15:30:00Z'
-    },
-    {
-      userId: '6',
-      showDateId: '7',
-      status: 'present',
-      updatedAt: '2024-12-14T16:00:00Z'
-    },
-    {
-      userId: '7',
-      showDateId: '8',
-      status: 'absent',
-      updatedAt: '2024-11-19T14:20:00Z'
+    shows.value = data || []
+  }
+
+  const fetchShowDates = async () => {
+    const { data, error } = await supabase
+      .from('show_dates')
+      .select('*')
+      .order('date', { ascending: true })
+
+    if (error) {
+      console.error('Error fetching show dates:', error)
+      return
     }
-  ]
 
-  // Initialize with mock data
-  shows.value = mockShows
-  showDates.value = mockShowDates
-  availabilityRecords.value = mockAvailability
+    showDates.value = data || []
+  }
+
+  const fetchShowAssignments = async () => {
+    const { data, error } = await supabase
+      .from('show_assignments')
+      .select('*')
+
+    if (error) {
+      console.error('Error fetching show assignments:', error)
+      return
+    }
+
+    showAssignments.value = data || []
+  }
+
+  const fetchShowAvailability = async () => {
+    const { data, error } = await supabase
+      .from('show_availability')
+      .select('*')
+
+    if (error) {
+      console.error('Error fetching show availability:', error)
+      return
+    }
+
+    availabilityRecords.value = data || []
+  }
 
   // Computed properties
   const showsByTeam = computed(() => (team: 'Samurai' | 'Gladiator' | 'Viking') => {
@@ -232,12 +89,12 @@ export const useShowsStore = defineStore('shows', () => {
   })
 
   const datesByShow = computed(() => (showId: string) => {
-    return showDates.value.filter(date => date.showId === showId)
+    return showDates.value.filter(date => date.show_id === showId)
   })
 
   const getAvailabilityForUser = computed(() => (userId: string, showDateId: string) => {
     const record = availabilityRecords.value.find(
-      r => r.userId === userId && r.showDateId === showDateId
+      r => r.user_id === userId && r.show_date_id === showDateId
     )
     return record?.status || 'absent'
   })
@@ -250,61 +107,120 @@ export const useShowsStore = defineStore('shows', () => {
     return showDates.value.find(date => date.id === showDateId)
   })
 
+  // Helper function to get assigned members for a show date
+  const getAssignedMembers = computed(() => (showDateId: string) => {
+    return showAssignments.value
+      .filter(assignment => assignment.show_date_id === showDateId)
+      .map(assignment => assignment.user_id)
+  })
+
   // Actions
   const createShow = async (name: string, team: 'Samurai' | 'Gladiator' | 'Viking', createdBy: string) => {
-    const newShow: Show = {
-      id: Date.now().toString(),
-      name,
-      team,
-      createdBy,
-      createdAt: new Date().toISOString()
+    const { data, error } = await supabase
+      .from('shows')
+      .insert({
+        name,
+        team,
+        created_by: createdBy
+      })
+      .select()
+      .single()
+
+    if (error) {
+      return { success: false, error: error.message }
     }
 
-    shows.value.push(newShow)
-    return { success: true, show: newShow }
+    if (data) {
+      shows.value.unshift(data)
+      return { success: true, show: data }
+    }
+
+    return { success: false, error: 'Failed to create show' }
   }
 
   const createShowDate = async (showId: string, date: string, createdBy: string) => {
-    const newShowDate: ShowDate = {
-      id: Date.now().toString(),
-      showId,
-      date,
-      assignedMembers: [],
-      maxMembers: 5,
-      createdBy,
-      createdAt: new Date().toISOString()
+    const { data, error } = await supabase
+      .from('show_dates')
+      .insert({
+        show_id: showId,
+        date,
+        max_members: 5,
+        created_by: createdBy
+      })
+      .select()
+      .single()
+
+    if (error) {
+      return { success: false, error: error.message }
     }
 
-    showDates.value.push(newShowDate)
-    return { success: true, showDate: newShowDate }
+    if (data) {
+      showDates.value.push(data)
+      return { success: true, showDate: data }
+    }
+
+    return { success: false, error: 'Failed to create show date' }
   }
 
   const assignMemberToShow = async (showDateId: string, userId: string) => {
+    // Check if already assigned
+    const existingAssignment = showAssignments.value.find(
+      a => a.show_date_id === showDateId && a.user_id === userId
+    )
+
+    if (existingAssignment) {
+      return { success: false, error: 'Member already assigned' }
+    }
+
+    // Check max members limit
     const showDate = showDates.value.find(d => d.id === showDateId)
     if (!showDate) {
       return { success: false, error: 'Show date not found' }
     }
 
-    if (showDate.assignedMembers.length >= showDate.maxMembers) {
+    const currentAssignments = showAssignments.value.filter(a => a.show_date_id === showDateId)
+    if (currentAssignments.length >= showDate.max_members) {
       return { success: false, error: 'Maximum members already assigned' }
     }
 
-    if (!showDate.assignedMembers.includes(userId)) {
-      showDate.assignedMembers.push(userId)
+    const { data, error } = await supabase
+      .from('show_assignments')
+      .insert({
+        show_date_id: showDateId,
+        user_id: userId
+      })
+      .select()
+      .single()
+
+    if (error) {
+      return { success: false, error: error.message }
     }
 
-    return { success: true }
+    if (data) {
+      showAssignments.value.push(data)
+      return { success: true }
+    }
+
+    return { success: false, error: 'Failed to assign member' }
   }
 
   const removeMemberFromShow = async (showDateId: string, userId: string) => {
-    const showDate = showDates.value.find(d => d.id === showDateId)
-    if (!showDate) {
-      return { success: false, error: 'Show date not found' }
+    const { error } = await supabase
+      .from('show_assignments')
+      .delete()
+      .eq('show_date_id', showDateId)
+      .eq('user_id', userId)
+
+    if (error) {
+      return { success: false, error: error.message }
     }
 
-    const index = showDate.assignedMembers.indexOf(userId)
+    // Remove from local state
+    const index = showAssignments.value.findIndex(
+      a => a.show_date_id === showDateId && a.user_id === userId
+    )
     if (index !== -1) {
-      showDate.assignedMembers.splice(index, 1)
+      showAssignments.value.splice(index, 1)
     }
 
     return { success: true }
@@ -312,82 +228,134 @@ export const useShowsStore = defineStore('shows', () => {
 
   const updateAvailability = async (userId: string, showDateId: string, status: 'absent' | 'present' | 'undecided') => {
     const existingRecord = availabilityRecords.value.find(
-      r => r.userId === userId && r.showDateId === showDateId
+      r => r.user_id === userId && r.show_date_id === showDateId
     )
 
     if (existingRecord) {
-      existingRecord.status = status
-      existingRecord.updatedAt = new Date().toISOString()
-    } else {
-      const newRecord: ShowAvailability = {
-        userId,
-        showDateId,
-        status,
-        updatedAt: new Date().toISOString()
+      // Update existing record
+      const { error } = await supabase
+        .from('show_availability')
+        .update({ status })
+        .eq('id', existingRecord.id)
+
+      if (error) {
+        return { success: false, error: error.message }
       }
-      availabilityRecords.value.push(newRecord)
+
+      existingRecord.status = status
+      existingRecord.updated_at = new Date().toISOString()
+    } else {
+      // Create new record
+      const { data, error } = await supabase
+        .from('show_availability')
+        .insert({
+          user_id: userId,
+          show_date_id: showDateId,
+          status
+        })
+        .select()
+        .single()
+
+      if (error) {
+        return { success: false, error: error.message }
+      }
+
+      if (data) {
+        availabilityRecords.value.push(data)
+      }
     }
 
     return { success: true }
   }
 
   const deleteShow = async (showId: string) => {
+    const { error } = await supabase
+      .from('shows')
+      .delete()
+      .eq('id', showId)
+
+    if (error) {
+      return { success: false, error: error.message }
+    }
+
+    // Remove from local state
     const index = shows.value.findIndex(s => s.id === showId)
     if (index !== -1) {
       shows.value.splice(index, 1)
-      // Also remove show dates and availability records
-      showDates.value = showDates.value.filter(d => d.showId !== showId)
-      availabilityRecords.value = availabilityRecords.value.filter(r => {
-        const showDate = showDates.value.find(d => d.id === r.showDateId)
-        return showDate && showDate.showId !== showId
-      })
-      return { success: true }
     }
-    return { success: false, error: 'Show not found' }
+
+    // Also remove related show dates and availability records
+    showDates.value = showDates.value.filter(d => d.show_id !== showId)
+    availabilityRecords.value = availabilityRecords.value.filter(r => {
+      const showDate = showDates.value.find(d => d.id === r.show_date_id)
+      return showDate && showDate.show_id !== showId
+    })
+
+    return { success: true }
   }
 
   const deleteShowDate = async (showDateId: string) => {
+    const { error } = await supabase
+      .from('show_dates')
+      .delete()
+      .eq('id', showDateId)
+
+    if (error) {
+      return { success: false, error: error.message }
+    }
+
+    // Remove from local state
     const index = showDates.value.findIndex(d => d.id === showDateId)
     if (index !== -1) {
       showDates.value.splice(index, 1)
-      // Also remove availability records
-      availabilityRecords.value = availabilityRecords.value.filter(r => r.showDateId !== showDateId)
-      return { success: true }
     }
-    return { success: false, error: 'Show date not found' }
+
+    // Also remove availability records
+    availabilityRecords.value = availabilityRecords.value.filter(r => r.show_date_id !== showDateId)
+
+    return { success: true }
   }
 
   const updateShowDate = async (showDateId: string, date: string, updatedBy: string) => {
-    const showDate = showDates.value.find(d => d.id === showDateId)
-    if (!showDate) {
-      return { success: false, error: 'Show date not found' }
+    const { data, error } = await supabase
+      .from('show_dates')
+      .update({ date })
+      .eq('id', showDateId)
+      .select()
+      .single()
+
+    if (error) {
+      return { success: false, error: error.message }
     }
 
-    showDate.date = date
-    showDate.maxMembers = 5
+    if (data) {
+      // Update local state
+      const index = showDates.value.findIndex(d => d.id === showDateId)
+      if (index !== -1) {
+        showDates.value[index] = data
+      }
+      return { success: true, showDate: data }
+    }
 
-    return { success: true, showDate }
+    return { success: false, error: 'Show date not found' }
   }
 
   const getAvailabilityMatrix = computed(() => (team: 'Samurai' | 'Gladiator' | 'Viking') => {
     const teamShows = showsByTeam.value(team)
     const teamShowDates = showDates.value.filter(date => {
-      const show = shows.value.find(s => s.id === date.showId)
+      const show = shows.value.find(s => s.id === date.show_id)
       return show && show.team === team
     })
     
-    const teamMembers = [
-      { id: '5', name: 'Samurai Member', team: 'Samurai' },
-      { id: '6', name: 'Samurai Member 2', team: 'Samurai' },
-      { id: '7', name: 'Gladiator Member', team: 'Gladiator' },
-      { id: '8', name: 'Viking Member', team: 'Viking' }
-    ].filter(member => member.team === team)
+    // This would need to be fetched from the user store
+    // For now, return empty array - you'll need to integrate with user store
+    const teamMembers: any[] = []
 
     return teamMembers.map(member => {
       const showDates = teamShowDates.map(showDate => ({
         showDateId: showDate.id,
-        showId: showDate.showId,
-        showName: shows.value.find(s => s.id === showDate.showId)?.name || 'Unknown Show',
+        showId: showDate.show_id,
+        showName: shows.value.find(s => s.id === showDate.show_id)?.name || 'Unknown Show',
         date: showDate.date,
         status: getAvailabilityForUser.value(member.id, showDate.id)
       }))
@@ -406,6 +374,7 @@ export const useShowsStore = defineStore('shows', () => {
     shows,
     showDates,
     availabilityRecords,
+    showAssignments,
     
     // Computed
     showsByTeam,
@@ -414,8 +383,10 @@ export const useShowsStore = defineStore('shows', () => {
     getShowById,
     getShowDateById,
     getAvailabilityMatrix,
+    getAssignedMembers,
     
     // Actions
+    initializeStore,
     createShow,
     createShowDate,
     assignMemberToShow,

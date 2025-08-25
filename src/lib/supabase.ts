@@ -3,44 +3,51 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
+let supabase: any
+
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables. Please check your .env file.')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+export { supabase }
 
 // Database types
 export interface Database {
   public: {
     Tables: {
-      users: {
-        Row: {
-          id: string
-          name: string
-          email: string
-          role: 'admin' | 'captain' | 'member'
-          team: 'Samurai' | 'Gladiator' | 'Viking' | null
-          is_captain: boolean
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          name: string
-          email: string
-          role?: 'admin' | 'captain' | 'member'
-          team?: 'Samurai' | 'Gladiator' | 'Viking' | null
-          is_captain?: boolean
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          name?: string
-          email?: string
-          role?: 'admin' | 'captain' | 'member'
-          team?: 'Samurai' | 'Gladiator' | 'Viking' | null
-          is_captain?: boolean
-          created_at?: string
-        }
+             users: {
+         Row: {
+           id: string
+           name: string
+           email: string
+           password_hash: string
+           role: 'admin' | 'captain' | 'member'
+           team: 'Samurai' | 'Gladiator' | 'Viking' | null
+           is_captain: boolean
+           created_at: string
+         }
+         Insert: {
+           id?: string
+           name: string
+           email: string
+           password_hash: string
+           role?: 'admin' | 'captain' | 'member'
+           team?: 'Samurai' | 'Gladiator' | 'Viking' | null
+           is_captain?: boolean
+           created_at?: string
+         }
+         Update: {
+           id?: string
+           name?: string
+           email?: string
+           password_hash?: string
+           role?: 'admin' | 'captain' | 'member'
+           team?: 'Samurai' | 'Gladiator' | 'Viking' | null
+           is_captain?: boolean
+           created_at?: string
+         }
       }
       coaching_sessions: {
         Row: {

@@ -106,25 +106,7 @@
         </div>
       </form>
 
-      <!-- Demo Credentials -->
-      <div class="demo-credentials">
-        <h3>Demo Credentials:</h3>
-        <div class="credential-item">
-          <strong>Admin:</strong> admin@example.com
-        </div>
-        <div class="credential-item">
-          <strong>Samurai Captain:</strong> samurai@example.com
-        </div>
-        <div class="credential-item">
-          <strong>Gladiator Captain:</strong> gladiator@example.com
-        </div>
-        <div class="credential-item">
-          <strong>Viking Captain:</strong> viking@example.com
-        </div>
-        <div class="credential-item">
-          <strong>Samurai Member:</strong> member1@example.com
-        </div>
-      </div>
+
     </div>
   </div>
 </template>
@@ -327,29 +309,7 @@ const handleRegister = async () => {
   border: 1px solid #fecaca;
 }
 
-.demo-credentials {
-  margin-top: 30px;
-  padding: 20px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border: 1px solid #e9ecef;
-}
 
-.demo-credentials h3 {
-  margin: 0 0 15px 0;
-  color: #495057;
-  font-size: 16px;
-}
-
-.credential-item {
-  margin-bottom: 8px;
-  font-size: 14px;
-  color: #6c757d;
-}
-
-.credential-item strong {
-  color: #495057;
-}
 
 /* Mobile responsive styles */
 @media (max-width: 768px) {
@@ -379,18 +339,7 @@ const handleRegister = async () => {
     font-size: 14px;
   }
   
-  .demo-credentials {
-    margin-top: 20px;
-    padding: 15px;
-  }
-  
-  .demo-credentials h3 {
-    font-size: 14px;
-  }
-  
-  .credential-item {
-    font-size: 13px;
-  }
+
 }
 
 @media (max-width: 480px) {
@@ -425,16 +374,6 @@ const handleRegister = async () => {
     font-size: 13px;
   }
   
-  .demo-credentials {
-    padding: 12px;
-  }
-  
-  .demo-credentials h3 {
-    font-size: 13px;
-  }
-  
-  .credential-item {
-    font-size: 12px;
-  }
+
 }
 </style> 
