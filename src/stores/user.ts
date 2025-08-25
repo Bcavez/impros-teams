@@ -14,21 +14,22 @@ export interface AuthState {
 export const useUserStore = defineStore('user', () => {
   const user = ref<User | null>(null)
   const isAuthenticated = ref(false)
+  const allUsers = ref<User[]>([])
 
   // Computed properties
   const isAdmin = computed(() => user.value?.role === 'admin')
   const isCaptain = computed(() => user.value?.role === 'captain' || user.value?.is_captain)
-  const canAccessAdmin = computed(() => isAdmin.value || isCaptain.value)
+  const canAccessAdmin = computed(() => isAdmin.value) // Only admins can access admin dashboard
   const currentTeam = computed(() => user.value?.team)
 
   // Actions
-  const login = async (email: string, password: string) => {
+  const login = async (name: string, password: string) => {
     try {
-      // Get user by email
+      // Get user by name
       const { data, error } = await supabase
         .from('users')
         .select('*')
-        .eq('email', email)
+        .eq('name', name)
         .single()
 
       if (error || !data) {
@@ -148,26 +149,37 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  const assignCaptainRole = async (userId: string, team: 'Samurai' | 'Gladiator' | 'Viking') => {
+  const assignCaptainRole = async (userId: string, isCaptain: boolean) => {
     if (!isAdmin.value) {
       return { success: false, error: 'Only admins can assign captain role' }
     }
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('users')
         .update({ 
-          role: 'captain',
-          team,
-          is_captain: true 
+          is_captain: isCaptain 
         })
         .eq('id', userId)
+        .select()
+        .single()
 
       if (error) {
         return { success: false, error: error.message }
       }
 
-      return { success: true }
+      // Update local state
+      const index = allUsers.value.findIndex(u => u.id === userId)
+      if (index !== -1) {
+        allUsers.value[index] = data
+      }
+
+      // Update current user if it's the same user
+      if (user.value?.id === userId) {
+        user.value = data
+      }
+
+      return { success: true, user: data }
     } catch (error) {
       return { success: false, error: 'Role assignment failed' }
     }
@@ -191,6 +203,10 @@ export const useUserStore = defineStore('user', () => {
   }
 
   const getAllUsers = async () => {
+    if (!isAdmin.value) {
+      return { success: false, error: 'Only admins can view all users', users: [] }
+    }
+
     try {
       const { data, error } = await supabase
         .from('users')
@@ -201,9 +217,68 @@ export const useUserStore = defineStore('user', () => {
         return { success: false, error: error.message, users: [] }
       }
 
+      allUsers.value = data || []
       return { success: true, users: data || [] }
     } catch (error) {
       return { success: false, error: 'Failed to fetch users', users: [] }
+    }
+  }
+
+  const updateUserRole = async (userId: string, role: 'admin' | 'captain' | 'member') => {
+    if (!isAdmin.value) {
+      return { success: false, error: 'Only admins can update user roles' }
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .update({ role })
+        .eq('id', userId)
+        .select()
+        .single()
+
+      if (error) {
+        return { success: false, error: error.message }
+      }
+
+      // Update local state
+      const index = allUsers.value.findIndex(u => u.id === userId)
+      if (index !== -1) {
+        allUsers.value[index] = data
+      }
+
+      // Update current user if it's the same user
+      if (user.value?.id === userId) {
+        user.value = data
+      }
+
+      return { success: true, user: data }
+    } catch (error) {
+      return { success: false, error: 'Failed to update user role' }
+    }
+  }
+
+  const deleteUser = async (userId: string) => {
+    if (!isAdmin.value) {
+      return { success: false, error: 'Only admins can delete users' }
+    }
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userId)
+
+      if (error) {
+        return { success: false, error: error.message }
+      }
+
+      // Remove from local state
+      allUsers.value = allUsers.value.filter(u => u.id !== userId)
+
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: 'Failed to delete user' }
     }
   }
 
@@ -211,6 +286,7 @@ export const useUserStore = defineStore('user', () => {
     // State
     user,
     isAuthenticated,
+    allUsers,
     
     // Computed
     isAdmin,
@@ -226,6 +302,8 @@ export const useUserStore = defineStore('user', () => {
     assignTeam,
     assignCaptainRole,
     getUsersByTeam,
-    getAllUsers
+    getAllUsers,
+    updateUserRole,
+    deleteUser
   }
 }) 

@@ -2,7 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import LoginView from '../views/LoginView.vue'
 import TeamDashboardView from '../views/TeamDashboardView.vue'
-import AdminDashboardView from '../views/AdminDashboardView.vue'
+import CaptainDashboardView from '../views/CaptainDashboardView.vue'
+import AdminUserManagementView from '../views/AdminUserManagementView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -26,8 +27,14 @@ const router = createRouter({
     {
       path: '/admin',
       name: 'admin',
-      component: AdminDashboardView,
+      component: AdminUserManagementView,
       meta: { requiresAuth: true, requiresAdmin: true }
+    },
+    {
+      path: '/captain',
+      name: 'captain',
+      component: CaptainDashboardView,
+      meta: { requiresAuth: true, requiresCaptain: true }
     }
   ],
 })
@@ -43,7 +50,13 @@ router.beforeEach((to, from, next) => {
   }
   
   // Check if route requires admin access
-  if (to.meta.requiresAdmin && !userStore.canAccessAdmin) {
+  if (to.meta.requiresAdmin && !userStore.isAdmin) {
+    next('/dashboard')
+    return
+  }
+  
+  // Check if route requires captain access
+  if (to.meta.requiresCaptain && !userStore.isCaptain) {
     next('/dashboard')
     return
   }
@@ -51,8 +64,10 @@ router.beforeEach((to, from, next) => {
   // Check if route requires guest (not logged in)
   if (to.meta.requiresGuest && userStore.isAuthenticated) {
     // Redirect to appropriate dashboard based on user role
-    if (userStore.canAccessAdmin) {
+    if (userStore.isAdmin) {
       next('/admin')
+    } else if (userStore.isCaptain) {
+      next('/captain')
     } else {
       next('/dashboard')
     }

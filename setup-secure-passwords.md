@@ -45,7 +45,7 @@ VALUES (
 ```
 
 ### Step 3: Test Login
-- **Email**: Your email
+- **Name**: Your name (as entered in the database)
 - **Password**: `default_password_hash` (for existing users)
 
 ## 🔧 How It Works Now

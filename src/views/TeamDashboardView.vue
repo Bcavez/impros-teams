@@ -1,24 +1,12 @@
 <template>
   <div class="dashboard-container">
-    <header class="dashboard-header">
-      <div class="header-content">
-        <h1>Team Dashboard</h1>
-        <div class="user-info">
-          <span>Welcome, {{ userStore.user?.name }}</span>
-          <span class="team-badge">{{ userStore.currentTeam || 'No Team' }}</span>
-          <button
-            v-if="userStore.canAccessAdmin"
-            @click="goToAdminDashboard"
-            class="admin-button"
-          >
-            Admin Dashboard
-          </button>
-          <button @click="handleLogout" class="logout-button">Logout</button>
-        </div>
-      </div>
-    </header>
-
+    <MainNavigation />
+    
     <div class="dashboard-content">
+      <div class="dashboard-header">
+        <h1>Team Dashboard</h1>
+        <p>Welcome to your team management dashboard</p>
+      </div>
       <!-- Shows Section -->
       <div class="shows-section">
         <div class="section-header">
@@ -36,16 +24,16 @@
             @click="openShowModal(showDate)"
           >
             <div class="show-info">
-              <h3>{{ getShowName(showDate.showId) }}</h3>
-              <p class="show-date">{{ formatDate(showDate.date) }}</p>
-              <p class="show-members">
-                <span class="members-label">Assigned: </span>
-                <span v-if="showDate.assignedMembers.length > 0">
-                  {{ getMemberNames(showDate.assignedMembers).join(', ') }}
-                </span>
-                <span v-else class="no-members">No members assigned</span>
-                <span class="member-count">({{ showDate.assignedMembers.length }}/5)</span>
-              </p>
+                          <h3>{{ getShowName(showDate.show_id) }}</h3>
+            <p class="show-date">{{ formatDate(showDate.date) }}</p>
+            <p class="show-members">
+              <span class="members-label">Assigned: </span>
+              <span v-if="getAssignedMembers(showDate.id).length > 0">
+                {{ getMemberNames(getAssignedMembers(showDate.id)).join(', ') }}
+              </span>
+              <span v-else class="no-members">No members assigned</span>
+              <span class="member-count">({{ getAssignedMembers(showDate.id).length }}/5)</span>
+            </p>
             </div>
             <div class="show-status">
               <span :class="['status-badge', `status-${getShowStatus(showDate.id)}`]">
@@ -162,6 +150,7 @@ import { useUserStore } from '@/stores/user'
 import { useCoachingStore } from '@/stores/coaching'
 import { useShowsStore } from '@/stores/shows'
 import { format, parseISO, isAfter, isBefore } from 'date-fns'
+import MainNavigation from '@/components/MainNavigation.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -185,7 +174,7 @@ const upcomingShows = computed(() => {
   
   return showsStore.showDates
     .filter(showDate => {
-      const show = showsStore.shows.find(s => s.id === showDate.showId)
+      const show = showsStore.shows.find(s => s.id === showDate.show_id)
       return show?.team === userStore.currentTeam && isAfter(parseISO(showDate.date), today)
     })
     .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
@@ -195,7 +184,7 @@ const upcomingShows = computed(() => {
 const allShows = computed(() => {
   return showsStore.showDates
     .filter(showDate => {
-      const show = showsStore.shows.find(s => s.id === showDate.showId)
+      const show = showsStore.shows.find(s => s.id === showDate.show_id)
       return show?.team === userStore.currentTeam
     })
     .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
@@ -251,6 +240,10 @@ const isPastEvent = (dateStr: string) => {
 const getShowName = (showId: string) => {
   const show = showsStore.shows.find(s => s.id === showId)
   return show?.name || 'Unknown Show'
+}
+
+const getAssignedMembers = (showDateId: string) => {
+  return showsStore.getAssignedMembers(showDateId)
 }
 
 const getMemberNames = (memberIds: string[]) => {
@@ -353,14 +346,7 @@ const formatModalDate = (dateStr: string) => {
   return format(parseISO(dateStr), 'EEEE, MMMM dd, yyyy')
 }
 
-const handleLogout = () => {
-  userStore.logout()
-  router.push('/login')
-}
 
-const goToAdminDashboard = () => {
-  router.push('/admin')
-}
 
 onMounted(() => {
   if (!userStore.isAuthenticated) {

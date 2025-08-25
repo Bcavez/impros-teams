@@ -21,13 +21,13 @@
       <!-- Login Form -->
       <form v-if="activeTab === 'login'" @submit.prevent="handleLogin" class="auth-form">
         <div class="form-group">
-          <label for="login-email">Email</label>
+          <label for="login-name">Name</label>
           <input
-            id="login-email"
-            v-model="loginForm.email"
-            type="email"
+            id="login-name"
+            v-model="loginForm.name"
+            type="text"
             required
-            placeholder="Enter your email"
+            placeholder="Enter your name"
           />
         </div>
         
@@ -125,7 +125,7 @@ const loginError = ref('')
 const registerError = ref('')
 
 const loginForm = reactive({
-  email: '',
+  name: '',
   password: ''
 })
 
@@ -141,7 +141,7 @@ const handleLogin = async () => {
   loginError.value = ''
 
   try {
-    const result = await userStore.login(loginForm.email, loginForm.password)
+    const result = await userStore.login(loginForm.name, loginForm.password)
     
     if (result.success) {
       router.push('/dashboard')
