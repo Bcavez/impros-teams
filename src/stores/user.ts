@@ -69,6 +69,30 @@ export const useUserStore = defineStore('user', () => {
         role: 'member',
         team: 'Samurai',
         isCaptain: false
+      },
+      {
+        id: '6',
+        name: 'Samurai Member 2',
+        email: 'member2@example.com',
+        role: 'member',
+        team: 'Samurai',
+        isCaptain: false
+      },
+      {
+        id: '7',
+        name: 'Gladiator Member',
+        email: 'member3@example.com',
+        role: 'member',
+        team: 'Gladiator',
+        isCaptain: false
+      },
+      {
+        id: '8',
+        name: 'Viking Member',
+        email: 'member4@example.com',
+        role: 'member',
+        team: 'Viking',
+        isCaptain: false
       }
     ]
 

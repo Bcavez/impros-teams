@@ -7,6 +7,9 @@
           <span>Welcome, {{ userStore.user?.name }}</span>
           <span class="role-badge">{{ userStore.user?.role }}</span>
           <span v-if="userStore.currentTeam" class="team-badge">{{ userStore.currentTeam }}</span>
+          <button @click="goToTeamDashboard" class="team-dashboard-button">
+            Team Dashboard
+          </button>
           <button @click="handleLogout" class="logout-button">Logout</button>
         </div>
       </div>
@@ -30,27 +33,6 @@
 
       <!-- Coaching Management -->
       <div v-if="activeTab === 'coaching'" class="tab-content">
-        <div class="section-header">
-          <h2>Coaching Sessions</h2>
-          <button @click="showCreateCoachingModal = true" class="primary-button">
-            Create Coaching Session
-          </button>
-        </div>
-
-        <div class="coaching-sessions">
-          <div v-for="session in teamCoachingSessions" :key="session.id" class="session-card">
-            <div class="session-info">
-              <h3>{{ formatDate(session.date) }}</h3>
-              <p class="session-team">{{ session.team }}</p>
-            </div>
-            <div class="session-actions">
-              <button @click="deleteCoachingSession(session.id)" class="delete-button">
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-
         <div class="attendance-matrix">
           <h3>Attendance Matrix</h3>
           <div class="matrix-container">
@@ -65,7 +47,10 @@
               </thead>
               <tbody>
                 <tr v-for="member in attendanceMatrix" :key="member.userId">
-                  <td class="member-name">{{ member.userName }}</td>
+                  <td class="member-name">
+                    {{ member.userName }}
+                    <span class="attendance-summary">({{ getAttendanceSummary(member.userId) }})</span>
+                  </td>
                   <td 
                     v-for="session in member.sessions" 
                     :key="session.sessionId"
@@ -80,6 +65,27 @@
                 </tr>
               </tbody>
             </table>
+          </div>
+        </div>
+
+        <div class="section-header">
+          <h2>Coaching Sessions</h2>
+          <button @click="showCreateCoachingModal = true" class="primary-button">
+            Create Coaching Session
+          </button>
+        </div>
+
+        <div class="coaching-sessions">
+          <div v-for="session in teamCoachingSessions" :key="session.id" class="session-card">
+            <div class="session-info">
+              <h3>{{ formatDate(session.date) }}</h3>
+              <p class="session-coach">{{ session.coach }}</p>
+            </div>
+            <div class="session-actions">
+              <button @click="deleteCoachingSession(session.id)" class="delete-button">
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -97,36 +103,32 @@
           <div v-for="show in teamShows" :key="show.id" class="show-card">
             <div class="show-info">
               <h3>{{ show.name }}</h3>
-              <p>{{ show.description }}</p>
+              <div v-for="showDate in getShowDates(show.id)" :key="showDate.id" class="show-date-info">
+                <span class="date">{{ formatDate(showDate.date) }}</span>
+                <span class="members">{{ showDate.assignedMembers.length }}/5 members</span>
+              </div>
             </div>
             <div class="show-actions">
-              <button @click="showCreateShowDateModal = true; selectedShow = show" class="secondary-button">
+              <button 
+                v-if="!getShowDates(show.id).length" 
+                @click="showCreateShowDateModal = true; selectedShow = show" 
+                class="secondary-button"
+              >
                 Add Date
               </button>
-              <button @click="deleteShow(show.id)" class="delete-button">
+              <button 
+                v-else 
+                @click="openUpdateShowDateModal(show)" 
+                class="secondary-button"
+              >
+                Update Date
+              </button>
+              <button @click="openAssignMembersModal(getShowDates(show.id)[0])" class="secondary-button">
+                Assign Members
+              </button>
+              <button @click="confirmDeleteShow(show.id)" class="delete-button">
                 Delete
               </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="show-dates">
-          <h3>Show Dates</h3>
-          <div v-for="show in teamShows" :key="show.id" class="show-dates-section">
-            <h4>{{ show.name }}</h4>
-            <div v-for="showDate in getShowDates(show.id)" :key="showDate.id" class="show-date-card">
-              <div class="show-date-info">
-                <span class="date">{{ formatDate(showDate.date) }}</span>
-                <span class="members">{{ showDate.assignedMembers.length }}/{{ showDate.maxMembers }} members</span>
-              </div>
-              <div class="show-date-actions">
-                <button @click="showAssignMembersModal = true; selectedShowDate = showDate" class="secondary-button">
-                  Assign Members
-                </button>
-                <button @click="deleteShowDate(showDate.id)" class="delete-button">
-                  Delete
-                </button>
-              </div>
             </div>
           </div>
         </div>
@@ -179,6 +181,16 @@
               required
             />
           </div>
+          <div class="form-group">
+            <label for="coaching-coach">Coach</label>
+            <input
+              id="coaching-coach"
+              v-model="newCoachingCoach"
+              type="text"
+              required
+              placeholder="Enter coach name"
+            />
+          </div>
           <div class="modal-actions">
             <button type="button" @click="showCreateCoachingModal = false" class="cancel-button">
               Cancel
@@ -206,15 +218,7 @@
               placeholder="Enter show name"
             />
           </div>
-          <div class="form-group">
-            <label for="show-description">Description</label>
-            <textarea
-              id="show-description"
-              v-model="newShow.description"
-              required
-              placeholder="Enter show description"
-            ></textarea>
-          </div>
+
           <div class="modal-actions">
             <button type="button" @click="showCreateShowModal = false" class="cancel-button">
               Cancel
@@ -227,42 +231,89 @@
       </div>
     </div>
 
-    <!-- Create Show Date Modal -->
-    <div v-if="showCreateShowDateModal" class="modal-overlay" @click="showCreateShowDateModal = false">
-      <div class="modal" @click.stop>
-        <h3>Add Show Date</h3>
-        <form @submit.prevent="createShowDate">
+         <!-- Create Show Date Modal -->
+     <div v-if="showCreateShowDateModal" class="modal-overlay" @click="showCreateShowDateModal = false">
+       <div class="modal" @click.stop>
+         <h3>Add Show Date</h3>
+         <form @submit.prevent="createShowDate">
+           <div class="form-group">
+             <label for="show-date">Date</label>
+             <input
+               id="show-date"
+               v-model="newShowDate.date"
+               type="date"
+               required
+             />
+           </div>
+           <div class="modal-actions">
+             <button type="button" @click="showCreateShowDateModal = false" class="cancel-button">
+               Cancel
+             </button>
+             <button type="submit" class="primary-button">
+               Create
+             </button>
+           </div>
+         </form>
+       </div>
+     </div>
+
+           <!-- Update Show Date Modal -->
+      <div v-if="showUpdateShowDateModal" class="modal-overlay" @click="showUpdateShowDateModal = false">
+        <div class="modal" @click.stop>
+          <h3>Update Show Date</h3>
+          <form @submit.prevent="updateShowDate">
+            <div class="form-group">
+              <label for="update-show-date">Date</label>
+              <input
+                id="update-show-date"
+                v-model="updateShowDateData.date"
+                type="date"
+                required
+              />
+            </div>
+            <div class="modal-actions">
+              <button type="button" @click="showUpdateShowDateModal = false" class="cancel-button">
+                Cancel
+              </button>
+              <button type="submit" class="primary-button">
+                Update
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Assign Members Modal -->
+      <div v-if="showAssignMembersModal" class="modal-overlay" @click="showAssignMembersModal = false">
+        <div class="modal" @click.stop>
+          <h3>Assign Members to Show</h3>
           <div class="form-group">
-            <label for="show-date">Date</label>
-            <input
-              id="show-date"
-              v-model="newShowDate.date"
-              type="date"
-              required
-            />
-          </div>
-          <div class="form-group">
-            <label for="max-members">Max Members</label>
-            <input
-              id="max-members"
-              v-model="newShowDate.maxMembers"
-              type="number"
-              min="1"
-              max="5"
-              required
-            />
+            <label>Available Members</label>
+            <div class="members-list">
+                             <div 
+                 v-for="member in availableMembers" 
+                 :key="member.id" 
+                 class="member-item"
+                 :class="{ 'assigned': selectedMembers.includes(member.id) }"
+                 @click="toggleMemberAssignment(member.id)"
+               >
+                 <span class="member-name">{{ member.name }}</span>
+                 <span class="member-status">
+                   {{ selectedMembers.includes(member.id) ? 'Selected' : 'Available' }}
+                 </span>
+               </div>
+            </div>
           </div>
           <div class="modal-actions">
-            <button type="button" @click="showCreateShowDateModal = false" class="cancel-button">
+            <button type="button" @click="showAssignMembersModal = false" class="cancel-button">
               Cancel
             </button>
-            <button type="submit" class="primary-button">
-              Create
+            <button type="button" @click="saveMemberAssignments" class="primary-button">
+              Save Assignments
             </button>
           </div>
-        </form>
+        </div>
       </div>
-    </div>
   </div>
 </template>
 
@@ -285,17 +336,21 @@ const activeTab = ref<'coaching' | 'shows'>('coaching')
 const showCreateCoachingModal = ref(false)
 const showCreateShowModal = ref(false)
 const showCreateShowDateModal = ref(false)
+const showUpdateShowDateModal = ref(false)
 const showAssignMembersModal = ref(false)
 
 // Form data
 const newCoachingDate = ref('')
+const newCoachingCoach = ref('')
 const newShow = ref({
-  name: '',
-  description: ''
+  name: ''
 })
 const newShowDate = ref({
-  date: '',
-  maxMembers: 5
+  date: ''
+})
+
+const updateShowDateData = ref({
+  date: ''
 })
 
 const selectedShow = ref<any>(null)
@@ -325,6 +380,20 @@ const availabilityMatrix = computed(() => {
   return showsStore.getAvailabilityMatrix(userStore.currentTeam || 'Samurai')
 })
 
+const availableMembers = computed(() => {
+  // Mock team members - in a real app, this would come from a user store
+  const teamMembers = [
+    { id: '5', name: 'Samurai Member', team: 'Samurai' },
+    { id: '6', name: 'Samurai Member 2', team: 'Samurai' },
+    { id: '7', name: 'Gladiator Member', team: 'Gladiator' },
+    { id: '8', name: 'Viking Member', team: 'Viking' }
+  ]
+  
+  return teamMembers.filter(member => member.team === userStore.currentTeam)
+})
+
+const selectedMembers = ref<string[]>([])
+
 // Methods
 const formatDate = (dateStr: string) => {
   return format(parseISO(dateStr), 'MMM dd, yyyy')
@@ -339,6 +408,24 @@ const getStatusLabel = (status: string) => {
   }
 }
 
+const getAttendanceSummary = (memberId: string) => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  
+  // Get all coaching sessions up until today for the current team
+  const sessionsUpToToday = teamCoachingSessions.value.filter(session => {
+    return parseISO(session.date) <= today
+  })
+  
+  // Count sessions where member was present
+  const presentCount = sessionsUpToToday.filter(session => {
+    const status = coachingStore.getAttendanceForUser(memberId, session.id)
+    return status === 'present'
+  }).length
+  
+  return `${presentCount}/${sessionsUpToToday.length}`
+}
+
 const getShowDates = (showId: string) => {
   return showsStore.datesByShow(showId)
 }
@@ -349,29 +436,30 @@ const getShowName = (showId: string) => {
 }
 
 const createCoachingSession = async () => {
-  if (!newCoachingDate.value) return
+  if (!newCoachingDate.value || !newCoachingCoach.value) return
   
   await coachingStore.createCoachingSession(
     newCoachingDate.value,
     userStore.currentTeam || 'Samurai',
+    newCoachingCoach.value,
     userStore.user?.id || ''
   )
   
   newCoachingDate.value = ''
+  newCoachingCoach.value = ''
   showCreateCoachingModal.value = false
 }
 
 const createShow = async () => {
-  if (!newShow.value.name || !newShow.value.description) return
+  if (!newShow.value.name) return
   
   await showsStore.createShow(
     newShow.value.name,
-    newShow.value.description,
     userStore.currentTeam || 'Samurai',
     userStore.user?.id || ''
   )
   
-  newShow.value = { name: '', description: '' }
+  newShow.value = { name: '' }
   showCreateShowModal.value = false
 }
 
@@ -381,18 +469,50 @@ const createShowDate = async () => {
   await showsStore.createShowDate(
     selectedShow.value?.id || '',
     newShowDate.value.date,
-    newShowDate.value.maxMembers,
     userStore.user?.id || ''
   )
   
-  newShowDate.value = { date: '', maxMembers: 5 }
+  newShowDate.value = { date: '' }
   selectedShow.value = null
   showCreateShowDateModal.value = false
+}
+
+const openUpdateShowDateModal = (show: any) => {
+  const showDate = getShowDates(show.id)[0]
+  if (showDate) {
+    selectedShow.value = show
+    selectedShowDate.value = showDate
+    updateShowDateData.value = {
+      date: showDate.date
+    }
+    showUpdateShowDateModal.value = true
+  }
+}
+
+const updateShowDate = async () => {
+  if (!updateShowDateData.value.date || !selectedShowDate.value) return
+  
+  await showsStore.updateShowDate(
+    selectedShowDate.value?.id || '',
+    updateShowDateData.value.date,
+    userStore.user?.id || ''
+  )
+  
+  updateShowDateData.value = { date: '' }
+  selectedShow.value = null
+  selectedShowDate.value = null
+  showUpdateShowDateModal.value = false
 }
 
 const deleteCoachingSession = async (sessionId: string) => {
   if (confirm('Are you sure you want to delete this coaching session?')) {
     await coachingStore.deleteCoachingSession(sessionId)
+  }
+}
+
+const confirmDeleteShow = async (showId: string) => {
+  if (confirm('Are you sure you want to delete this show?')) {
+    await showsStore.deleteShow(showId)
   }
 }
 
@@ -427,6 +547,60 @@ const getNextStatus = (currentStatus: string) => {
 const handleLogout = () => {
   userStore.logout()
   router.push('/login')
+}
+
+const goToTeamDashboard = () => {
+  router.push('/dashboard')
+}
+
+const isMemberAssigned = (memberId: string) => {
+  if (!selectedShowDate.value) return false
+  return selectedShowDate.value.assignedMembers.includes(memberId)
+}
+
+const toggleMemberAssignment = (memberId: string) => {
+  const index = selectedMembers.value.indexOf(memberId)
+  if (index === -1) {
+    selectedMembers.value.push(memberId)
+  } else {
+    selectedMembers.value.splice(index, 1)
+  }
+}
+
+const openAssignMembersModal = (showDate: any) => {
+  selectedShowDate.value = showDate
+  initializeSelectedMembers()
+  showAssignMembersModal.value = true
+}
+
+const initializeSelectedMembers = () => {
+  if (selectedShowDate.value) {
+    selectedMembers.value = [...selectedShowDate.value.assignedMembers]
+  }
+}
+
+const saveMemberAssignments = async () => {
+  if (!selectedShowDate.value) return
+  
+  // Get current assignments
+  const currentAssignments = selectedShowDate.value.assignedMembers || []
+  
+  // Remove members that are no longer selected
+  for (const memberId of currentAssignments) {
+    if (!selectedMembers.value.includes(memberId)) {
+      await showsStore.removeMemberFromShow(selectedShowDate.value.id, memberId)
+    }
+  }
+  
+  // Add new assignments
+  for (const memberId of selectedMembers.value) {
+    if (!currentAssignments.includes(memberId)) {
+      await showsStore.assignMemberToShow(selectedShowDate.value.id, memberId)
+    }
+  }
+  
+  selectedMembers.value = []
+  showAssignMembersModal.value = false
 }
 
 onMounted(() => {
@@ -501,6 +675,21 @@ onMounted(() => {
 
 .logout-button:hover {
   background: #c0392b;
+}
+
+.team-dashboard-button {
+  background: #17a2b8;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+}
+
+.team-dashboard-button:hover {
+  background: #138496;
 }
 
 .dashboard-content {
@@ -624,7 +813,7 @@ onMounted(() => {
   font-size: 16px;
 }
 
-.session-team {
+.session-coach {
   margin: 0;
   color: #666;
   font-size: 14px;
@@ -681,6 +870,12 @@ onMounted(() => {
 .member-name {
   font-weight: 500;
   color: #333;
+}
+
+.attendance-summary {
+  font-size: 12px;
+  color: #666;
+  margin-left: 5px;
 }
 
 .attendance-cell {
@@ -843,5 +1038,209 @@ onMounted(() => {
 
 .cancel-button:hover {
   background: #5a6268;
+}
+
+.members-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #f8f9fa;
+}
+
+.member-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border-bottom: 1px solid #e9ecef;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.member-item:hover {
+  background: #e9ecef;
+}
+
+.member-item.assigned {
+  background: #d4edda;
+  color: #155724;
+}
+
+.member-item.assigned:hover {
+  background: #c3e6cb;
+}
+
+.member-name {
+  font-weight: 500;
+}
+
+.member-status {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #6c757d;
+  color: white;
+}
+
+.member-item.assigned .member-status {
+  background: #28a745;
+}
+
+/* Mobile responsive styles */
+@media (max-width: 768px) {
+  .dashboard-content {
+    padding: 20px 10px;
+  }
+  
+  .header-content {
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
+  }
+  
+  .user-info {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .navigation-tabs {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .tab-button {
+    width: 100%;
+  }
+  
+  .section-header {
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
+  }
+  
+  .primary-button {
+    width: 100%;
+  }
+  
+  .coaching-sessions,
+  .shows-list {
+    gap: 15px;
+  }
+  
+  .session-card,
+  .show-card {
+    padding: 15px;
+  }
+  
+  .session-actions,
+  .show-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .action-button {
+    width: 100%;
+    text-align: center;
+  }
+  
+  .attendance-matrix,
+  .availability-matrix {
+    overflow-x: auto;
+  }
+  
+  .matrix-table {
+    min-width: 600px;
+  }
+  
+  .modal-content {
+    width: 95%;
+    max-width: none;
+    margin: 10px;
+  }
+  
+  .modal-header {
+    padding: 15px 20px;
+  }
+  
+  .modal-body {
+    padding: 20px;
+  }
+  
+  .form-group {
+    margin-bottom: 15px;
+  }
+  
+  .modal-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .cancel-button,
+  .primary-button {
+    width: 100%;
+  }
+  
+  .members-list {
+    max-height: 200px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-content {
+    padding: 15px 5px;
+  }
+  
+  .header-content h1 {
+    font-size: 20px;
+  }
+  
+  .user-info {
+    font-size: 14px;
+  }
+  
+  .role-badge,
+  .team-badge {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+  
+  .logout-button,
+  .team-dashboard-button {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  
+  .session-card,
+  .show-card {
+    padding: 12px;
+  }
+  
+  .modal-content {
+    width: 98%;
+    margin: 5px;
+  }
+  
+  .modal-header {
+    padding: 12px 15px;
+  }
+  
+  .modal-body {
+    padding: 15px;
+  }
+  
+  .form-group input,
+  .form-group textarea {
+    padding: 10px;
+    font-size: 13px;
+  }
+  
+  .members-list {
+    max-height: 150px;
+  }
+  
+  .member-item {
+    padding: 10px;
+  }
 }
 </style> 

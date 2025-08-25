@@ -212,11 +212,18 @@ const handleRegister = async () => {
   padding: 20px;
 }
 
+@media (max-width: 768px) {
+  .login-container {
+    min-height: 100vh;
+    padding: 20px 10px;
+  }
+}
+
 .login-card {
   background: white;
   border-radius: 12px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-  padding: 40px;
+  padding: 30px;
   width: 100%;
   max-width: 400px;
 }
@@ -224,14 +231,14 @@ const handleRegister = async () => {
 .login-title {
   text-align: center;
   color: #333;
-  margin-bottom: 30px;
+  margin-bottom: 25px;
   font-size: 24px;
   font-weight: 600;
 }
 
 .auth-tabs {
   display: flex;
-  margin-bottom: 30px;
+  margin-bottom: 25px;
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid #e0e0e0;
@@ -342,5 +349,92 @@ const handleRegister = async () => {
 
 .credential-item strong {
   color: #495057;
+}
+
+/* Mobile responsive styles */
+@media (max-width: 768px) {
+  .login-container {
+    padding: 10px;
+  }
+  
+  .login-card {
+    padding: 30px 20px;
+  }
+  
+  .login-title {
+    font-size: 20px;
+  }
+  
+  .auth-form {
+    gap: 15px;
+  }
+  
+  .form-group input {
+    padding: 10px;
+    font-size: 13px;
+  }
+  
+  .submit-button {
+    padding: 10px;
+    font-size: 14px;
+  }
+  
+  .demo-credentials {
+    margin-top: 20px;
+    padding: 15px;
+  }
+  
+  .demo-credentials h3 {
+    font-size: 14px;
+  }
+  
+  .credential-item {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-card {
+    padding: 25px 15px;
+  }
+  
+  .login-title {
+    font-size: 18px;
+  }
+  
+  .auth-tabs {
+    margin-bottom: 20px;
+  }
+  
+  .tab-button {
+    padding: 10px;
+    font-size: 13px;
+  }
+  
+  .form-group label {
+    font-size: 13px;
+  }
+  
+  .form-group input {
+    padding: 8px;
+    font-size: 12px;
+  }
+  
+  .submit-button {
+    padding: 8px;
+    font-size: 13px;
+  }
+  
+  .demo-credentials {
+    padding: 12px;
+  }
+  
+  .demo-credentials h3 {
+    font-size: 13px;
+  }
+  
+  .credential-item {
+    font-size: 12px;
+  }
 }
 </style> 

@@ -6,76 +6,148 @@
         <div class="user-info">
           <span>Welcome, {{ userStore.user?.name }}</span>
           <span class="team-badge">{{ userStore.currentTeam || 'No Team' }}</span>
+          <button
+            v-if="userStore.canAccessAdmin"
+            @click="goToAdminDashboard"
+            class="admin-button"
+          >
+            Admin Dashboard
+          </button>
           <button @click="handleLogout" class="logout-button">Logout</button>
         </div>
       </div>
     </header>
 
     <div class="dashboard-content">
-      <div class="calendar-section">
-        <h2>Calendar</h2>
-        <div class="calendar-controls">
-          <button @click="previousMonth" class="calendar-nav">‹</button>
-          <h3>{{ currentMonthYear }}</h3>
-          <button @click="nextMonth" class="calendar-nav">›</button>
+      <!-- Shows Section -->
+      <div class="shows-section">
+        <div class="section-header">
+          <h2>Shows</h2>
+          <button @click="toggleShowAll" class="toggle-button">
+            {{ showAllShows ? 'Show Less' : 'Show All' }}
+          </button>
         </div>
-
-        <div class="calendar">
-          <div class="calendar-header">
-            <div v-for="day in weekDays" :key="day" class="calendar-day-header">
-              {{ day }}
+        
+        <div class="shows-list">
+          <div 
+            v-for="showDate in displayedShows" 
+            :key="showDate.id" 
+            :class="['show-card', { 'past-event': isPastEvent(showDate.date) }]"
+            @click="openShowModal(showDate)"
+          >
+            <div class="show-info">
+              <h3>{{ getShowName(showDate.showId) }}</h3>
+              <p class="show-date">{{ formatDate(showDate.date) }}</p>
+              <p class="show-members">
+                <span class="members-label">Assigned: </span>
+                <span v-if="showDate.assignedMembers.length > 0">
+                  {{ getMemberNames(showDate.assignedMembers).join(', ') }}
+                </span>
+                <span v-else class="no-members">No members assigned</span>
+                <span class="member-count">({{ showDate.assignedMembers.length }}/5)</span>
+              </p>
             </div>
-          </div>
-          
-          <div class="calendar-grid">
-            <div
-              v-for="day in calendarDays"
-              :key="day.date"
-              :class="[
-                'calendar-day',
-                {
-                  'other-month': !day.isCurrentMonth,
-                  'today': day.isToday,
-                  'has-coaching': day.hasCoaching,
-                  'has-show': day.hasShow,
-                  'coaching-present': day.coachingStatus === 'present',
-                  'coaching-absent': day.coachingStatus === 'absent',
-                  'coaching-undecided': day.coachingStatus === 'undecided',
-                  'show-present': day.showStatus === 'present',
-                  'show-absent': day.showStatus === 'absent',
-                  'show-undecided': day.showStatus === 'undecided'
-                }
-              ]"
-              @click="handleDayClick(day)"
-            >
-              <span class="day-number">{{ day.dayNumber }}</span>
-              <div v-if="day.hasCoaching" class="event-indicator coaching">
-                <span class="event-dot"></span>
-                <span class="event-label">Coaching</span>
-              </div>
-              <div v-if="day.hasShow" class="event-indicator show">
-                <span class="event-dot"></span>
-                <span class="event-label">{{ day.showName }}</span>
-              </div>
+            <div class="show-status">
+              <span :class="['status-badge', `status-${getShowStatus(showDate.id)}`]">
+                {{ getStatusLabel(getShowStatus(showDate.id)) }}
+              </span>
             </div>
           </div>
         </div>
       </div>
 
-      <div class="status-legend">
-        <h3>Status Legend</h3>
-        <div class="legend-items">
-          <div class="legend-item">
-            <div class="legend-color present"></div>
-            <span>Present</span>
+      <!-- Coaching Section -->
+      <div class="coaching-section">
+        <div class="section-header">
+          <h2>Coaching Sessions</h2>
+          <button @click="toggleCoachingAll" class="toggle-button">
+            {{ showAllCoaching ? 'Show Less' : 'Show More' }}
+          </button>
+        </div>
+        
+        <div class="coaching-list">
+          <div 
+            v-for="session in displayedCoaching" 
+            :key="session.id" 
+            :class="['coaching-card', { 'past-event': isPastEvent(session.date) }]"
+            @click="openCoachingModal(session)"
+          >
+            <div class="coaching-info">
+              <h3>{{ formatDate(session.date) }}</h3>
+              <p class="coaching-coach">{{ session.coach }}</p>
+            </div>
+            <div class="coaching-status">
+              <span :class="['status-badge', `status-${getCoachingStatus(session.id)}`]">
+                {{ getStatusLabel(getCoachingStatus(session.id)) }}
+              </span>
+            </div>
           </div>
-          <div class="legend-item">
-            <div class="legend-color absent"></div>
-            <span>Absent</span>
+        </div>
+      </div>
+
+      <!-- Status Modal -->
+      <div v-if="showStatusModal" class="modal-overlay" @click="closeStatusModal">
+        <div class="modal-content" @click.stop>
+          <div class="modal-header">
+            <h3>Update Availability</h3>
+            <button @click="closeStatusModal" class="modal-close">&times;</button>
           </div>
-          <div class="legend-item">
-            <div class="legend-color undecided"></div>
-            <span>Undecided</span>
+          <div class="modal-body">
+            <p class="modal-date">{{ formatModalDate(selectedEvent?.date) }}</p>
+            <p class="modal-title">{{ selectedEvent?.title }}</p>
+            
+            <div v-if="selectedEvent?.type === 'coaching'" class="status-section">
+              <h4>Coaching Session</h4>
+              <div class="status-buttons">
+                <button 
+                  :class="['status-button', { active: selectedCoachingStatus === 'present' }]"
+                  @click="selectedCoachingStatus = 'present'"
+                >
+                  Present
+                </button>
+                <button 
+                  :class="['status-button', { active: selectedCoachingStatus === 'absent' }]"
+                  @click="selectedCoachingStatus = 'absent'"
+                >
+                  Absent
+                </button>
+                <button 
+                  :class="['status-button', { active: selectedCoachingStatus === 'undecided' }]"
+                  @click="selectedCoachingStatus = 'undecided'"
+                >
+                  Undecided
+                </button>
+              </div>
+            </div>
+            
+            <div v-if="selectedEvent?.type === 'show'" class="status-section">
+              <h4>Show</h4>
+              <div class="status-buttons">
+                <button 
+                  :class="['status-button', { active: selectedShowStatus === 'present' }]"
+                  @click="selectedShowStatus = 'present'"
+                >
+                  Present
+                </button>
+                <button 
+                  :class="['status-button', { active: selectedShowStatus === 'absent' }]"
+                  @click="selectedShowStatus = 'absent'"
+                >
+                  Absent
+                </button>
+                <button 
+                  :class="['status-button', { active: selectedShowStatus === 'undecided' }]"
+                  @click="selectedShowStatus = 'undecided'"
+                >
+                  Undecided
+                </button>
+              </div>
+            </div>
+            
+            <div class="modal-actions">
+              <button @click="closeStatusModal" class="cancel-button">Cancel</button>
+              <button @click="confirmStatusUpdate" class="confirm-button">Confirm</button>
+            </div>
           </div>
         </div>
       </div>
@@ -89,127 +161,205 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useCoachingStore } from '@/stores/coaching'
 import { useShowsStore } from '@/stores/shows'
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, addMonths, subMonths, parseISO } from 'date-fns'
+import { format, parseISO, isAfter, isBefore } from 'date-fns'
 
 const router = useRouter()
 const userStore = useUserStore()
 const coachingStore = useCoachingStore()
 const showsStore = useShowsStore()
 
-const currentDate = ref(new Date())
+// Toggle states
+const showAllShows = ref(false)
+const showAllCoaching = ref(false)
 
-const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+// Modal state
+const showStatusModal = ref(false)
+const selectedEvent = ref<any>(null)
+const selectedCoachingStatus = ref<'present' | 'absent' | 'undecided'>('present')
+const selectedShowStatus = ref<'present' | 'absent' | 'undecided'>('present')
 
-const currentMonthYear = computed(() => {
-  return format(currentDate.value, 'MMMM yyyy')
+// Get upcoming shows (filter out past dates)
+const upcomingShows = computed(() => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  
+  return showsStore.showDates
+    .filter(showDate => {
+      const show = showsStore.shows.find(s => s.id === showDate.showId)
+      return show?.team === userStore.currentTeam && isAfter(parseISO(showDate.date), today)
+    })
+    .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
 })
 
-const calendarDays = computed(() => {
-  const start = startOfMonth(currentDate.value)
-  const end = endOfMonth(currentDate.value)
-  const days = eachDayOfInterval({ start, end })
-  
-  // Add days from previous month to fill first week
-  const firstDayOfWeek = start.getDay()
-  for (let i = firstDayOfWeek - 1; i >= 0; i--) {
-    const prevDate = subMonths(start, 1)
-    prevDate.setDate(start.getDate() - i - 1)
-    days.unshift(prevDate)
-  }
-  
-  // Add days from next month to fill last week
-  const lastDayOfWeek = end.getDay()
-  for (let i = 1; i <= 6 - lastDayOfWeek; i++) {
-    const nextDate = addMonths(end, 1)
-    nextDate.setDate(end.getDate() + i)
-    days.push(nextDate)
-  }
-
-  return days.map(date => {
-    const dateStr = format(date, 'yyyy-MM-dd')
-    const isCurrentMonth = isSameMonth(date, currentDate.value)
-    const isTodayDate = isToday(date)
-    
-    // Check for coaching sessions
-    const coachingSession = coachingStore.coachingSessions.find(session => 
-      session.date === dateStr && session.team === userStore.currentTeam
-    )
-    
-    // Check for shows
-    const showDate = showsStore.showDates.find(showDate => {
+// Get all shows for the team (both past and future)
+const allShows = computed(() => {
+  return showsStore.showDates
+    .filter(showDate => {
       const show = showsStore.shows.find(s => s.id === showDate.showId)
-      return showDate.date === dateStr && show?.team === userStore.currentTeam
+      return show?.team === userStore.currentTeam
     })
-    
-    const show = showDate ? showsStore.shows.find(s => s.id === showDate.showId) : null
+    .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
+})
 
-    // Get user's status for this date
-    const coachingStatus = coachingSession ? 
-      coachingStore.getAttendanceForUser(userStore.user?.id || '', coachingSession.id) : null
-    
-    const showStatus = showDate ? 
-      showsStore.getAvailabilityForUser(userStore.user?.id || '', showDate.id) : null
+// Get upcoming coaching sessions (filter out past dates)
+const upcomingCoaching = computed(() => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  
+  return coachingStore.coachingSessions
+    .filter(session => session.team === userStore.currentTeam && isAfter(parseISO(session.date), today))
+    .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
+})
 
-    return {
-      date: dateStr,
-      dayNumber: format(date, 'd'),
-      isCurrentMonth,
-      isToday: isTodayDate,
-      hasCoaching: !!coachingSession,
-      hasShow: !!showDate,
-      showName: show?.name || '',
-      coachingStatus,
-      showStatus
-    }
+// Get all coaching sessions for the team (both past and future)
+const allCoaching = computed(() => {
+  return coachingStore.coachingSessions
+    .filter(session => session.team === userStore.currentTeam)
+    .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
+})
+
+// Displayed shows (2 upcoming by default, all if showAllShows is true)
+const displayedShows = computed(() => {
+  return showAllShows.value ? allShows.value : upcomingShows.value.slice(0, 2)
+})
+
+// Displayed coaching (4 upcoming by default, all if showAllCoaching is true)
+const displayedCoaching = computed(() => {
+  return showAllCoaching.value ? allCoaching.value : upcomingCoaching.value.slice(0, 4)
+})
+
+// Toggle functions
+const toggleShowAll = () => {
+  showAllShows.value = !showAllShows.value
+}
+
+const toggleCoachingAll = () => {
+  showAllCoaching.value = !showAllCoaching.value
+}
+
+// Utility functions
+const formatDate = (dateStr: string) => {
+  return format(parseISO(dateStr), 'MMM dd, yyyy')
+}
+
+const isPastEvent = (dateStr: string) => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return isBefore(parseISO(dateStr), today)
+}
+
+const getShowName = (showId: string) => {
+  const show = showsStore.shows.find(s => s.id === showId)
+  return show?.name || 'Unknown Show'
+}
+
+const getMemberNames = (memberIds: string[]) => {
+  const mockUsers = [
+    { id: '1', name: 'Admin User' },
+    { id: '2', name: 'Samurai Captain' },
+    { id: '3', name: 'Gladiator Captain' },
+    { id: '4', name: 'Viking Captain' },
+    { id: '5', name: 'Samurai Member' },
+    { id: '6', name: 'Samurai Member 2' },
+    { id: '7', name: 'Gladiator Member' },
+    { id: '8', name: 'Viking Member' }
+  ]
+  
+  return memberIds.map(id => {
+    const user = mockUsers.find(u => u.id === id)
+    return user?.name || 'Unknown Member'
   })
-})
-
-const previousMonth = () => {
-  currentDate.value = subMonths(currentDate.value, 1)
 }
 
-const nextMonth = () => {
-  currentDate.value = addMonths(currentDate.value, 1)
+const getShowStatus = (showDateId: string) => {
+  return showsStore.getAvailabilityForUser(userStore.user?.id || '', showDateId)
 }
 
-const handleDayClick = async (day: any) => {
-  if (!day.isCurrentMonth) return
+const getCoachingStatus = (sessionId: string) => {
+  return coachingStore.getAttendanceForUser(userStore.user?.id || '', sessionId)
+}
 
-  if (day.hasCoaching) {
-    const coachingSession = coachingStore.coachingSessions.find(session => 
-      session.date === day.date && session.team === userStore.currentTeam
+const getStatusLabel = (status: string) => {
+  switch (status) {
+    case 'present': return 'Present'
+    case 'absent': return 'Absent'
+    case 'undecided': return 'Undecided'
+    default: return 'Absent'
+  }
+}
+
+// Modal functions
+const openShowModal = (showDate: any) => {
+  const show = showsStore.shows.find(s => s.id === showDate.showId)
+  selectedEvent.value = {
+    type: 'show',
+    date: showDate.date,
+    title: show?.name || 'Unknown Show',
+    showDateId: showDate.id
+  }
+  selectedShowStatus.value = getShowStatus(showDate.id)
+  showStatusModal.value = true
+}
+
+const openCoachingModal = (session: any) => {
+  selectedEvent.value = {
+    type: 'coaching',
+    date: session.date,
+    title: `Coaching with ${session.coach}`,
+    sessionId: session.id
+  }
+  selectedCoachingStatus.value = getCoachingStatus(session.id)
+  showStatusModal.value = true
+}
+
+const closeStatusModal = () => {
+  showStatusModal.value = false
+  selectedEvent.value = null
+  selectedCoachingStatus.value = 'present'
+  selectedShowStatus.value = 'present'
+}
+
+const confirmStatusUpdate = async () => {
+  if (!selectedEvent.value) return
+
+  // Prevent updates for past dates
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const eventDate = parseISO(selectedEvent.value.date)
+  if (isBefore(eventDate, today)) {
+    alert('Cannot update availability for past dates.')
+    closeStatusModal()
+    return
+  }
+
+  if (selectedEvent.value.type === 'coaching') {
+    await coachingStore.updateAttendance(
+      userStore.user?.id || '',
+      selectedEvent.value.sessionId,
+      selectedCoachingStatus.value
     )
-    
-    if (coachingSession) {
-      const currentStatus = coachingStore.getAttendanceForUser(userStore.user?.id || '', coachingSession.id)
-      const nextStatus = getNextStatus(currentStatus)
-      await coachingStore.updateAttendance(userStore.user?.id || '', coachingSession.id, nextStatus)
-    }
+  } else if (selectedEvent.value.type === 'show') {
+    await showsStore.updateAvailability(
+      userStore.user?.id || '',
+      selectedEvent.value.showDateId,
+      selectedShowStatus.value
+    )
   }
 
-  if (day.hasShow) {
-    const showDate = showsStore.showDates.find(showDate => {
-      const show = showsStore.shows.find(s => s.id === showDate.showId)
-      return showDate.date === day.date && show?.team === userStore.currentTeam
-    })
-    
-    if (showDate) {
-      const currentStatus = showsStore.getAvailabilityForUser(userStore.user?.id || '', showDate.id)
-      const nextStatus = getNextStatus(currentStatus)
-      await showsStore.updateAvailability(userStore.user?.id || '', showDate.id, nextStatus)
-    }
-  }
+  closeStatusModal()
 }
 
-const getNextStatus = (currentStatus: 'absent' | 'present' | 'undecided' | null) => {
-  if (!currentStatus || currentStatus === 'absent') return 'present'
-  if (currentStatus === 'present') return 'undecided'
-  return 'absent'
+const formatModalDate = (dateStr: string) => {
+  return format(parseISO(dateStr), 'EEEE, MMMM dd, yyyy')
 }
 
 const handleLogout = () => {
   userStore.logout()
   router.push('/login')
+}
+
+const goToAdminDashboard = () => {
+  router.push('/admin')
 }
 
 onMounted(() => {
@@ -277,13 +427,30 @@ onMounted(() => {
   background: #c0392b;
 }
 
+.admin-button {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+}
+
+.admin-button:hover {
+  background: #218838;
+}
+
 .dashboard-content {
   max-width: 1200px;
   margin: 0 auto;
   padding: 40px 20px;
 }
 
-.calendar-section {
+/* Section styles */
+.shows-section,
+.coaching-section {
   background: white;
   border-radius: 12px;
   padding: 30px;
@@ -291,193 +458,407 @@ onMounted(() => {
   margin-bottom: 30px;
 }
 
-.calendar-section h2 {
-  margin: 0 0 20px 0;
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.section-header h2 {
+  margin: 0;
   color: #333;
   font-size: 20px;
 }
 
-.calendar-controls {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  margin-bottom: 20px;
-}
-
-.calendar-nav {
+.toggle-button {
   background: #667eea;
   color: white;
   border: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
+  padding: 8px 16px;
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 18px;
+  font-size: 14px;
   transition: background-color 0.3s ease;
 }
 
-.calendar-nav:hover {
+.toggle-button:hover {
   background: #5a6fd8;
 }
 
-.calendar-controls h3 {
+/* Card styles */
+.shows-list,
+.coaching-list {
+  display: grid;
+  gap: 15px;
+}
+
+.show-card,
+.coaching-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative; /* Added for past event badge positioning */
+}
+
+.show-card:hover,
+.coaching-card:hover {
+  background: #e9ecef;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Past event styling */
+.show-card.past-event,
+.coaching-card.past-event {
+  opacity: 0.7;
+  background: #f8f9fa;
+  border-color: #dee2e6;
+}
+
+.show-card.past-event:hover,
+.coaching-card.past-event:hover {
+  background: #e9ecef;
+  transform: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.show-card.past-event::before,
+.coaching-card.past-event::before {
+  content: 'Past';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #6c757d;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.show-info h3,
+.coaching-info h3 {
+  margin: 0 0 5px 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.show-date,
+.coaching-coach {
+  margin: 0 0 3px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.show-members {
+  margin: 0;
+  color: #666;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.members-label {
+  font-weight: 500;
+  color: #333;
+}
+
+.no-members {
+  color: #999;
+  font-style: italic;
+}
+
+.member-count {
+  color: #888;
+  font-size: 11px;
+  margin-left: 5px;
+}
+
+/* Status badge styles */
+.status-badge {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-badge.status-present {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-badge.status-absent {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.status-badge.status-undecided {
+  background: #fff3cd;
+  color: #856404;
+}
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.modal-header h3 {
   margin: 0;
   color: #333;
   font-size: 18px;
-  min-width: 150px;
-  text-align: center;
 }
 
-.calendar {
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.calendar-header {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  background: #f8f9fa;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.calendar-day-header {
-  padding: 12px;
-  text-align: center;
-  font-weight: 600;
-  color: #495057;
-  font-size: 14px;
-}
-
-.calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-}
-
-.calendar-day {
-  min-height: 100px;
-  border-right: 1px solid #e0e0e0;
-  border-bottom: 1px solid #e0e0e0;
-  padding: 8px;
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
   cursor: pointer;
-  transition: background-color 0.3s ease;
-  position: relative;
+  color: #666;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.calendar-day:hover {
-  background: #f8f9fa;
-}
-
-.calendar-day.other-month {
-  background: #f8f9fa;
-  color: #adb5bd;
-}
-
-.calendar-day.today {
-  background: #e3f2fd;
-  font-weight: 600;
-}
-
-.day-number {
-  font-size: 14px;
-  font-weight: 500;
+.modal-close:hover {
   color: #333;
 }
 
-.event-indicator {
-  margin-top: 4px;
-  font-size: 10px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.modal-body {
+  padding: 20px;
 }
 
-.event-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-
-.event-indicator.coaching .event-dot {
-  background: #28a745;
-}
-
-.event-indicator.show .event-dot {
-  background: #007bff;
-}
-
-.event-label {
+.modal-date {
+  font-size: 16px;
   color: #666;
+  margin: 0 0 10px 0;
+}
+
+.modal-title {
+  font-size: 18px;
+  color: #333;
+  margin: 0 0 20px 0;
   font-weight: 500;
 }
 
-/* Status colors */
-.calendar-day.coaching-present {
-  background: #d4edda;
+.status-section {
+  margin-bottom: 20px;
 }
 
-.calendar-day.coaching-absent {
-  background: #f8d7da;
-}
-
-.calendar-day.coaching-undecided {
-  background: #fff3cd;
-}
-
-.calendar-day.show-present {
-  background: #d1ecf1;
-}
-
-.calendar-day.show-absent {
-  background: #f5c6cb;
-}
-
-.calendar-day.show-undecided {
-  background: #ffeaa7;
-}
-
-.status-legend {
-  background: white;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-.status-legend h3 {
+.status-section h4 {
   margin: 0 0 15px 0;
   color: #333;
   font-size: 16px;
 }
 
-.legend-items {
+.status-buttons {
   display: flex;
-  gap: 20px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
+.status-button {
+  padding: 10px 20px;
+  border: 2px solid #ddd;
+  background: white;
   color: #666;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s ease;
 }
 
-.legend-color {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
+.status-button:hover {
+  border-color: #667eea;
+  color: #667eea;
 }
 
-.legend-color.present {
-  background: #28a745;
+.status-button.active {
+  background: #667eea;
+  border-color: #667eea;
+  color: white;
 }
 
-.legend-color.absent {
-  background: #dc3545;
+.modal-actions {
+  display: flex;
+  gap: 15px;
+  justify-content: flex-end;
+  margin-top: 30px;
 }
 
-.legend-color.undecided {
-  background: #ffc107;
+.cancel-button {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+}
+
+.cancel-button:hover {
+  background: #5a6268;
+}
+
+.confirm-button {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+}
+
+.confirm-button:hover {
+  background: #5a6fd8;
+}
+
+/* Mobile responsive styles */
+@media (max-width: 768px) {
+  .dashboard-content {
+    padding: 20px 10px;
+  }
+
+  .header-content {
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
+  }
+
+  .user-info {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .shows-section,
+  .coaching-section {
+    padding: 20px 15px;
+  }
+
+  .section-header {
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
+  }
+
+  .toggle-button {
+    width: 100%;
+  }
+
+  .show-card,
+  .coaching-card {
+    padding: 15px;
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+
+  .show-info,
+  .coaching-info {
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-content {
+    padding: 15px 5px;
+  }
+
+  .header-content h1 {
+    font-size: 20px;
+  }
+
+  .user-info {
+    font-size: 14px;
+  }
+
+  .team-badge {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  .logout-button,
+  .admin-button {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .shows-section,
+  .coaching-section {
+    padding: 15px 10px;
+  }
+
+  .show-card,
+  .coaching-card {
+    padding: 12px;
+  }
+
+  .modal-content {
+    width: 95%;
+    margin: 10px;
+  }
+
+  .modal-header {
+    padding: 15px 20px;
+  }
+
+  .modal-body {
+    padding: 20px;
+  }
+
+  .status-buttons {
+    flex-direction: column;
+  }
+
+  .status-button {
+    width: 100%;
+    text-align: center;
+  }
+
+  .modal-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .cancel-button,
+  .confirm-button {
+    width: 100%;
+  }
 }
 </style> 

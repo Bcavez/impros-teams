@@ -4,7 +4,6 @@ import { ref, computed } from 'vue'
 export interface Show {
   id: string
   name: string
-  description: string
   createdBy: string
   createdAt: string
   team: 'Samurai' | 'Gladiator' | 'Viking'
@@ -37,7 +36,6 @@ export const useShowsStore = defineStore('shows', () => {
     {
       id: '1',
       name: 'Winter Performance',
-      description: 'Annual winter showcase',
       createdBy: '2',
       createdAt: '2024-01-01T10:00:00Z',
       team: 'Samurai'
@@ -45,10 +43,37 @@ export const useShowsStore = defineStore('shows', () => {
     {
       id: '2',
       name: 'Spring Festival',
-      description: 'Spring celebration show',
       createdBy: '3',
       createdAt: '2024-01-05T10:00:00Z',
       team: 'Gladiator'
+    },
+    {
+      id: '3',
+      name: 'Summer Spectacular',
+      createdBy: '2',
+      createdAt: '2024-01-15T10:00:00Z',
+      team: 'Samurai'
+    },
+    {
+      id: '4',
+      name: 'Autumn Showcase',
+      createdBy: '3',
+      createdAt: '2024-01-20T10:00:00Z',
+      team: 'Gladiator'
+    },
+    {
+      id: '5',
+      name: 'Viking Conquest',
+      createdBy: '4',
+      createdAt: '2024-01-25T10:00:00Z',
+      team: 'Viking'
+    },
+    {
+      id: '6',
+      name: 'Holiday Special',
+      createdBy: '2',
+      createdAt: '2024-02-01T10:00:00Z',
+      team: 'Samurai'
     }
   ]
 
@@ -56,7 +81,7 @@ export const useShowsStore = defineStore('shows', () => {
     {
       id: '1',
       showId: '1',
-      date: '2024-02-15',
+      date: '2025-02-15',
       assignedMembers: ['5', '6'],
       maxMembers: 5,
       createdBy: '2',
@@ -65,11 +90,65 @@ export const useShowsStore = defineStore('shows', () => {
     {
       id: '2',
       showId: '2',
-      date: '2024-03-20',
+      date: '2025-03-20',
       assignedMembers: ['7'],
       maxMembers: 5,
       createdBy: '3',
       createdAt: '2024-01-12T10:00:00Z'
+    },
+    {
+      id: '3',
+      showId: '3',
+      date: '2025-06-15',
+      assignedMembers: ['5'],
+      maxMembers: 5,
+      createdBy: '2',
+      createdAt: '2024-01-15T10:00:00Z'
+    },
+    {
+      id: '4',
+      showId: '4',
+      date: '2025-09-10',
+      assignedMembers: ['7'],
+      maxMembers: 5,
+      createdBy: '3',
+      createdAt: '2024-01-20T10:00:00Z'
+    },
+    {
+      id: '5',
+      showId: '5',
+      date: '2025-07-04',
+      assignedMembers: ['8'],
+      maxMembers: 5,
+      createdBy: '4',
+      createdAt: '2024-01-25T10:00:00Z'
+    },
+    {
+      id: '6',
+      showId: '6',
+      date: '2025-12-20',
+      assignedMembers: ['5', '6'],
+      maxMembers: 5,
+      createdBy: '2',
+      createdAt: '2024-02-01T10:00:00Z'
+    },
+    {
+      id: '7',
+      showId: '1',
+      date: '2024-12-15',
+      assignedMembers: ['5', '6'],
+      maxMembers: 5,
+      createdBy: '2',
+      createdAt: '2024-11-10T10:00:00Z'
+    },
+    {
+      id: '8',
+      showId: '2',
+      date: '2024-11-20',
+      assignedMembers: ['7'],
+      maxMembers: 5,
+      createdBy: '3',
+      createdAt: '2024-10-12T10:00:00Z'
     }
   ]
 
@@ -85,6 +164,60 @@ export const useShowsStore = defineStore('shows', () => {
       showDateId: '1',
       status: 'undecided',
       updatedAt: '2024-01-13T09:15:00Z'
+    },
+    {
+      userId: '7',
+      showDateId: '2',
+      status: 'present',
+      updatedAt: '2024-01-16T14:20:00Z'
+    },
+    {
+      userId: '5',
+      showDateId: '3',
+      status: 'absent',
+      updatedAt: '2024-01-18T11:45:00Z'
+    },
+    {
+      userId: '7',
+      showDateId: '4',
+      status: 'undecided',
+      updatedAt: '2024-01-22T16:30:00Z'
+    },
+    {
+      userId: '8',
+      showDateId: '5',
+      status: 'present',
+      updatedAt: '2024-01-26T13:15:00Z'
+    },
+    {
+      userId: '5',
+      showDateId: '6',
+      status: 'present',
+      updatedAt: '2024-02-03T10:00:00Z'
+    },
+    {
+      userId: '6',
+      showDateId: '6',
+      status: 'undecided',
+      updatedAt: '2024-02-03T10:30:00Z'
+    },
+    {
+      userId: '5',
+      showDateId: '7',
+      status: 'present',
+      updatedAt: '2024-12-14T15:30:00Z'
+    },
+    {
+      userId: '6',
+      showDateId: '7',
+      status: 'present',
+      updatedAt: '2024-12-14T16:00:00Z'
+    },
+    {
+      userId: '7',
+      showDateId: '8',
+      status: 'absent',
+      updatedAt: '2024-11-19T14:20:00Z'
     }
   ]
 
@@ -118,11 +251,10 @@ export const useShowsStore = defineStore('shows', () => {
   })
 
   // Actions
-  const createShow = async (name: string, description: string, team: 'Samurai' | 'Gladiator' | 'Viking', createdBy: string) => {
+  const createShow = async (name: string, team: 'Samurai' | 'Gladiator' | 'Viking', createdBy: string) => {
     const newShow: Show = {
       id: Date.now().toString(),
       name,
-      description,
       team,
       createdBy,
       createdAt: new Date().toISOString()
@@ -132,13 +264,13 @@ export const useShowsStore = defineStore('shows', () => {
     return { success: true, show: newShow }
   }
 
-  const createShowDate = async (showId: string, date: string, maxMembers: number, createdBy: string) => {
+  const createShowDate = async (showId: string, date: string, createdBy: string) => {
     const newShowDate: ShowDate = {
       id: Date.now().toString(),
       showId,
       date,
       assignedMembers: [],
-      maxMembers,
+      maxMembers: 5,
       createdBy,
       createdAt: new Date().toISOString()
     }
@@ -225,6 +357,18 @@ export const useShowsStore = defineStore('shows', () => {
     return { success: false, error: 'Show date not found' }
   }
 
+  const updateShowDate = async (showDateId: string, date: string, updatedBy: string) => {
+    const showDate = showDates.value.find(d => d.id === showDateId)
+    if (!showDate) {
+      return { success: false, error: 'Show date not found' }
+    }
+
+    showDate.date = date
+    showDate.maxMembers = 5
+
+    return { success: true, showDate }
+  }
+
   const getAvailabilityMatrix = computed(() => (team: 'Samurai' | 'Gladiator' | 'Viking') => {
     const teamShows = showsByTeam.value(team)
     const teamShowDates = showDates.value.filter(date => {
@@ -278,6 +422,7 @@ export const useShowsStore = defineStore('shows', () => {
     removeMemberFromShow,
     updateAvailability,
     deleteShow,
-    deleteShowDate
+    deleteShowDate,
+    updateShowDate
   }
 }) 
