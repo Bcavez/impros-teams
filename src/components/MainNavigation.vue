@@ -13,43 +13,81 @@
           <span class="team-badge">{{ userStore.currentTeam || 'No Team' }}</span>
         </div>
         
-        <div class="nav-actions">
-          <router-link
-            v-if="userStore.isAdmin && !isOnAdminPage"
-            to="/admin"
-            class="nav-button admin-button"
-          >
-            🛠️ Admin
-          </router-link>
-          
-          <router-link
-            v-if="userStore.isCaptain && !isOnCaptainPage"
-            to="/captain"
-            class="nav-button captain-button"
-          >
-            ⚡ Captain
-          </router-link>
-          
-          <button @click="handleLogout" class="nav-button logout-button">
-            Logout
-          </button>
-        </div>
+                 <div class="nav-actions">
+           <button 
+             v-if="userStore.isCaptain || userStore.isAdmin"
+             @click="handleRefresh" 
+             class="nav-button refresh-button"
+             :disabled="isRefreshing"
+           >
+             {{ isRefreshing ? '🔄' : '🔄' }} {{ isRefreshing ? 'Refreshing...' : 'Refresh' }}
+           </button>
+           
+           <router-link
+             v-if="userStore.isAdmin && !isOnAdminPage"
+             to="/admin"
+             class="nav-button admin-button"
+           >
+             🛠️ Admin
+           </router-link>
+           
+           <router-link
+             v-if="userStore.isCaptain && !isOnCaptainPage"
+             to="/captain"
+             class="nav-button captain-button"
+           >
+             ⚡ Captain
+           </router-link>
+           
+           <button @click="handleLogout" class="nav-button logout-button">
+             Logout
+           </button>
+         </div>
       </div>
     </div>
   </nav>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { useCoachingStore } from '@/stores/coaching'
+import { useShowsStore } from '@/stores/shows'
 
 const userStore = useUserStore()
+const coachingStore = useCoachingStore()
+const showsStore = useShowsStore()
 const route = useRoute()
 const router = useRouter()
 
+const isRefreshing = ref(false)
+
 const isOnAdminPage = computed(() => route.path === '/admin')
 const isOnCaptainPage = computed(() => route.path === '/captain')
+
+const handleRefresh = async () => {
+  if (isRefreshing.value) return
+  
+  isRefreshing.value = true
+  
+  try {
+    // Refresh data based on user role
+    if (userStore.isCaptain) {
+      await Promise.all([
+        coachingStore.refreshData(),
+        showsStore.refreshData()
+      ])
+    } else if (userStore.isAdmin) {
+      // For admin, refresh user data
+      await userStore.getAllUsers()
+    }
+  } catch (error) {
+    console.error('Error refreshing data:', error)
+  } finally {
+    isRefreshing.value = false
+  }
+}
 
 const handleLogout = () => {
   userStore.logout()
@@ -160,6 +198,24 @@ const handleLogout = () => {
   background: #e67e22;
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.refresh-button {
+  background: #17a2b8;
+  color: white;
+}
+
+.refresh-button:hover:not(:disabled) {
+  background: #138496;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.refresh-button:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .logout-button {

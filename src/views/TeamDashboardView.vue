@@ -348,10 +348,18 @@ const formatModalDate = (dateStr: string) => {
 
 
 
-onMounted(() => {
+onMounted(async () => {
   if (!userStore.isAuthenticated) {
     router.push('/login')
+    return
   }
+
+  // Initialize stores with cached data (will only fetch if cache is expired)
+  await Promise.all([
+    coachingStore.fetchCoachingSessions(),
+    coachingStore.fetchAttendanceRecords(),
+    showsStore.initializeStore()
+  ])
 })
 </script>
 

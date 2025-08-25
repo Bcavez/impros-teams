@@ -62,6 +62,17 @@ export const useUserStore = defineStore('user', () => {
   const logout = () => {
     user.value = null
     isAuthenticated.value = false
+    
+    // Clear all cache when user logs out
+    import('./coaching').then(({ useCoachingStore }) => {
+      const coachingStore = useCoachingStore()
+      coachingStore.clearCache()
+    })
+    
+    import('./shows').then(({ useShowsStore }) => {
+      const showsStore = useShowsStore()
+      showsStore.clearCache()
+    })
   }
 
   const register = async (name: string, email: string, password: string) => {
@@ -223,6 +234,8 @@ export const useUserStore = defineStore('user', () => {
       return { success: false, error: 'Failed to fetch users', users: [] }
     }
   }
+
+
 
   const updateUserRole = async (userId: string, role: 'admin' | 'captain' | 'member') => {
     if (!isAdmin.value) {

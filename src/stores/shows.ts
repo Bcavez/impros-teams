@@ -13,10 +13,43 @@ export const useShowsStore = defineStore('shows', () => {
   const showDates = ref<ShowDate[]>([])
   const availabilityRecords = ref<ShowAvailability[]>([])
   const showAssignments = ref<ShowAssignment[]>([])
+  
+  // Separate cache timestamps for each data type - use sessionStorage for persistence
+  const getCacheTimestamp = (key: string) => {
+    const stored = sessionStorage.getItem(`shows_cache_${key}`)
+    return stored ? parseInt(stored) : Date.now() - 6 * 60 * 1000 // Start expired if no cache
+  }
+  
+  const setCacheTimestamp = (key: string, timestamp: number) => {
+    sessionStorage.setItem(`shows_cache_${key}`, timestamp.toString())
+  }
+  
+  const showsLastFetchTime = ref<number>(getCacheTimestamp('shows'))
+  const showDatesLastFetchTime = ref<number>(getCacheTimestamp('showDates'))
+  const assignmentsLastFetchTime = ref<number>(getCacheTimestamp('assignments'))
+  const availabilityLastFetchTime = ref<number>(getCacheTimestamp('availability'))
+  const cacheDuration = 5 * 60 * 1000 // 5 minutes in milliseconds
+  
+  console.log('🏪 Shows store initialized with cache timestamps:', {
+    shows: showsLastFetchTime.value,
+    showDates: showDatesLastFetchTime.value,
+    assignments: assignmentsLastFetchTime.value,
+    availability: availabilityLastFetchTime.value,
+    showsAge: Date.now() - showsLastFetchTime.value,
+    showDatesAge: Date.now() - showDatesLastFetchTime.value,
+    assignmentsAge: Date.now() - assignmentsLastFetchTime.value,
+    availabilityAge: Date.now() - availabilityLastFetchTime.value
+  })
 
   // Initialize store with data from Supabase
   const initializeStore = async () => {
     try {
+      // Update cache timestamps from sessionStorage before checking cache
+      showsLastFetchTime.value = getCacheTimestamp('shows')
+      showDatesLastFetchTime.value = getCacheTimestamp('showDates')
+      assignmentsLastFetchTime.value = getCacheTimestamp('assignments')
+      availabilityLastFetchTime.value = getCacheTimestamp('availability')
+      
       await Promise.all([
         fetchShows(),
         fetchShowDates(),
@@ -29,7 +62,18 @@ export const useShowsStore = defineStore('shows', () => {
   }
 
   // Fetch functions
-  const fetchShows = async () => {
+  const fetchShows = async (forceRefresh = false) => {
+    const timeSinceLastFetch = Date.now() - showsLastFetchTime.value
+    console.log(`🔍 Shows cache check: ${timeSinceLastFetch}ms since last fetch, cache duration: ${cacheDuration}ms, forceRefresh: ${forceRefresh}`)
+    
+    // Check cache if not forcing refresh
+    if (!forceRefresh && timeSinceLastFetch < cacheDuration) {
+      console.log('✅ Shows: Using cached data')
+      return { success: true, shows: shows.value, cached: true }
+    }
+    
+    console.log('🔄 Shows: Fetching fresh data')
+
     const { data, error } = await supabase
       .from('shows')
       .select('*')
@@ -37,13 +81,22 @@ export const useShowsStore = defineStore('shows', () => {
 
     if (error) {
       console.error('Error fetching shows:', error)
-      return
+      return { success: false, error: error.message }
     }
 
     shows.value = data || []
+    const timestamp = Date.now()
+    showsLastFetchTime.value = timestamp
+    setCacheTimestamp('shows', timestamp)
+    return { success: true, shows: data || [] }
   }
 
-  const fetchShowDates = async () => {
+  const fetchShowDates = async (forceRefresh = false) => {
+    // Check cache if not forcing refresh
+    if (!forceRefresh && Date.now() - showDatesLastFetchTime.value < cacheDuration) {
+      return { success: true, showDates: showDates.value, cached: true }
+    }
+
     const { data, error } = await supabase
       .from('show_dates')
       .select('*')
@@ -51,36 +104,58 @@ export const useShowsStore = defineStore('shows', () => {
 
     if (error) {
       console.error('Error fetching show dates:', error)
-      return
+      return { success: false, error: error.message }
     }
 
     showDates.value = data || []
+    const timestamp = Date.now()
+    showDatesLastFetchTime.value = timestamp
+    setCacheTimestamp('showDates', timestamp)
+    return { success: true, showDates: data || [] }
   }
 
-  const fetchShowAssignments = async () => {
+  const fetchShowAssignments = async (forceRefresh = false) => {
+    // Check cache if not forcing refresh
+    if (!forceRefresh && Date.now() - assignmentsLastFetchTime.value < cacheDuration) {
+      return { success: true, showAssignments: showAssignments.value, cached: true }
+    }
+
     const { data, error } = await supabase
       .from('show_assignments')
       .select('*')
 
     if (error) {
       console.error('Error fetching show assignments:', error)
-      return
+      return { success: false, error: error.message }
     }
 
     showAssignments.value = data || []
+    const timestamp = Date.now()
+    assignmentsLastFetchTime.value = timestamp
+    setCacheTimestamp('assignments', timestamp)
+    return { success: true, showAssignments: data || [] }
   }
 
-  const fetchShowAvailability = async () => {
+  const fetchShowAvailability = async (forceRefresh = false) => {
+    // Check cache if not forcing refresh
+    if (!forceRefresh && Date.now() - availabilityLastFetchTime.value < cacheDuration) {
+      return { success: true, availabilityRecords: availabilityRecords.value, cached: true }
+    }
+
     const { data, error } = await supabase
       .from('show_availability')
       .select('*')
 
     if (error) {
       console.error('Error fetching show availability:', error)
-      return
+      return { success: false, error: error.message }
     }
 
     availabilityRecords.value = data || []
+    const timestamp = Date.now()
+    availabilityLastFetchTime.value = timestamp
+    setCacheTimestamp('availability', timestamp)
+    return { success: true, availabilityRecords: data || [] }
   }
 
   // Computed properties
@@ -340,7 +415,7 @@ export const useShowsStore = defineStore('shows', () => {
     return { success: false, error: 'Show date not found' }
   }
 
-  const getAvailabilityMatrix = computed(() => (team: 'Samurai' | 'Gladiator' | 'Viking') => {
+  const getAvailabilityMatrix = (team: 'Samurai' | 'Gladiator' | 'Viking') => {
     const teamShows = showsByTeam.value(team)
     const teamShowDates = showDates.value.filter(date => {
       const show = shows.value.find(s => s.id === date.show_id)
@@ -367,7 +442,33 @@ export const useShowsStore = defineStore('shows', () => {
         showDates
       }
     })
-  })
+  }
+
+  const refreshData = async () => {
+    try {
+      await Promise.all([
+        fetchShows(true),
+        fetchShowDates(true),
+        fetchShowAssignments(true),
+        fetchShowAvailability(true)
+      ])
+      return { success: true }
+    } catch (error) {
+      console.error('Error refreshing shows data:', error)
+      return { success: false, error: 'Failed to refresh data' }
+    }
+  }
+
+  const clearCache = () => {
+    sessionStorage.removeItem('shows_cache_shows')
+    sessionStorage.removeItem('shows_cache_showDates')
+    sessionStorage.removeItem('shows_cache_assignments')
+    sessionStorage.removeItem('shows_cache_availability')
+    showsLastFetchTime.value = Date.now() - 6 * 60 * 1000
+    showDatesLastFetchTime.value = Date.now() - 6 * 60 * 1000
+    assignmentsLastFetchTime.value = Date.now() - 6 * 60 * 1000
+    availabilityLastFetchTime.value = Date.now() - 6 * 60 * 1000
+  }
 
   return {
     // State
@@ -382,11 +483,14 @@ export const useShowsStore = defineStore('shows', () => {
     getAvailabilityForUser,
     getShowById,
     getShowDateById,
-    getAvailabilityMatrix,
     getAssignedMembers,
     
     // Actions
     initializeStore,
+    fetchShows,
+    fetchShowDates,
+    fetchShowAssignments,
+    fetchShowAvailability,
     createShow,
     createShowDate,
     assignMemberToShow,
@@ -394,6 +498,9 @@ export const useShowsStore = defineStore('shows', () => {
     updateAvailability,
     deleteShow,
     deleteShowDate,
-    updateShowDate
+    updateShowDate,
+    refreshData,
+    clearCache,
+    getAvailabilityMatrix
   }
 }) 

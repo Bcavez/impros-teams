@@ -164,9 +164,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { format } from 'date-fns'
 import MainNavigation from '@/components/MainNavigation.vue'
+
+const router = useRouter()
 
 const userStore = useUserStore()
 
@@ -315,8 +318,13 @@ const formatDate = (dateString: string) => {
 }
 
 // Lifecycle
-onMounted(() => {
-  loadUsers()
+onMounted(async () => {
+  if (!userStore.isAuthenticated || !userStore.isAdmin) {
+    router.push('/login')
+    return
+  }
+  
+  await loadUsers()
 })
 </script>
 

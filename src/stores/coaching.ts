@@ -17,6 +17,27 @@ export interface AttendanceRecord {
 export const useCoachingStore = defineStore('coaching', () => {
   const coachingSessions = ref<CoachingSession[]>([])
   const attendanceRecords = ref<AttendanceStatus[]>([])
+  
+  // Separate cache timestamps for each data type - use sessionStorage for persistence
+  const getCacheTimestamp = (key: string) => {
+    const stored = sessionStorage.getItem(`coaching_cache_${key}`)
+    return stored ? parseInt(stored) : Date.now() - 6 * 60 * 1000 // Start expired if no cache
+  }
+  
+  const setCacheTimestamp = (key: string, timestamp: number) => {
+    sessionStorage.setItem(`coaching_cache_${key}`, timestamp.toString())
+  }
+  
+  const sessionsLastFetchTime = ref<number>(getCacheTimestamp('sessions'))
+  const attendanceLastFetchTime = ref<number>(getCacheTimestamp('attendance'))
+  const cacheDuration = 5 * 60 * 1000 // 5 minutes in milliseconds
+  
+  console.log('🏪 Coaching store initialized with cache timestamps:', {
+    sessions: sessionsLastFetchTime.value,
+    attendance: attendanceLastFetchTime.value,
+    sessionsAge: Date.now() - sessionsLastFetchTime.value,
+    attendanceAge: Date.now() - attendanceLastFetchTime.value
+  })
 
   // Computed properties
   const sessionsByTeam = computed(() => (team: 'Samurai' | 'Gladiator' | 'Viking') => {
@@ -35,7 +56,18 @@ export const useCoachingStore = defineStore('coaching', () => {
   })
 
   // Actions
-  const fetchCoachingSessions = async (team?: 'Samurai' | 'Gladiator' | 'Viking') => {
+  const fetchCoachingSessions = async (team?: 'Samurai' | 'Gladiator' | 'Viking', forceRefresh = false) => {
+    const timeSinceLastFetch = Date.now() - sessionsLastFetchTime.value
+    console.log(`🔍 Coaching sessions cache check: ${timeSinceLastFetch}ms since last fetch, cache duration: ${cacheDuration}ms, forceRefresh: ${forceRefresh}`)
+    
+    // Check cache if not forcing refresh
+    if (!forceRefresh && timeSinceLastFetch < cacheDuration) {
+      console.log('✅ Coaching sessions: Using cached data')
+      return { success: true, sessions: coachingSessions.value, cached: true }
+    }
+    
+    console.log('🔄 Coaching sessions: Fetching fresh data')
+
     try {
       let query = supabase
         .from('coaching_sessions')
@@ -54,6 +86,9 @@ export const useCoachingStore = defineStore('coaching', () => {
       }
 
       coachingSessions.value = data || []
+      const timestamp = Date.now()
+      sessionsLastFetchTime.value = timestamp
+      setCacheTimestamp('sessions', timestamp)
       return { success: true, sessions: data || [] }
     } catch (error) {
       console.error('Error fetching coaching sessions:', error)
@@ -61,7 +96,14 @@ export const useCoachingStore = defineStore('coaching', () => {
     }
   }
 
-  const fetchAttendanceRecords = async (sessionId?: string) => {
+  const fetchAttendanceRecords = async (sessionId?: string, forceRefresh = false) => {
+    const timeSinceLastFetch = Date.now() - attendanceLastFetchTime.value
+    
+    // Check cache if not forcing refresh
+    if (!forceRefresh && timeSinceLastFetch < cacheDuration) {
+      return { success: true, records: attendanceRecords.value, cached: true }
+    }
+
     try {
       let query = supabase
         .from('attendance_records')
@@ -79,6 +121,9 @@ export const useCoachingStore = defineStore('coaching', () => {
       }
 
       attendanceRecords.value = data || []
+      const timestamp = Date.now()
+      attendanceLastFetchTime.value = timestamp
+      setCacheTimestamp('attendance', timestamp)
       return { success: true, records: data || [] }
     } catch (error) {
       console.error('Error fetching attendance records:', error)
@@ -193,43 +238,50 @@ export const useCoachingStore = defineStore('coaching', () => {
     }
   }
 
-  const getAttendanceMatrix = computed(() => async (team: 'Samurai' | 'Gladiator' | 'Viking') => {
+  // Cache for team members
+  const teamMembersCache = ref<{ [team: string]: { users: any[], timestamp: number } }>({})
+  const teamMembersCacheDuration = 5 * 60 * 1000 // 5 minutes
+
+  const getAttendanceMatrix = async (team: 'Samurai' | 'Gladiator' | 'Viking') => {
     try {
-      // Fetch team members
-      const { data: users, error: usersError } = await supabase
-        .from('users')
-        .select('id, name, team')
-        .eq('team', team)
-
-      if (usersError) {
-        return { success: false, error: usersError.message, matrix: [] }
+      // Use cached data from the store instead of making new database calls
+      const teamSessions = coachingSessions.value.filter(session => session.team === team)
+      const sessionIds = teamSessions.map(s => s.id)
+      const teamAttendance = attendanceRecords.value.filter(record => 
+        sessionIds.includes(record.session_id)
+      )
+      
+      // Check if we have cached team members
+      let teamMembers = teamMembersCache.value[team]?.users || []
+      const teamMembersAge = teamMembersCache.value[team] ? 
+        Date.now() - teamMembersCache.value[team].timestamp : Infinity
+      
+      // If no cached data or cache expired, fetch team members
+      if (teamMembers.length === 0 || teamMembersAge > teamMembersCacheDuration) {
+        console.log(`🔄 Fetching team members for ${team}`)
+        const { useUserStore } = await import('./user')
+        const userStore = useUserStore()
+        
+        const teamMembersResult = await userStore.getUsersByTeam(team)
+        if (!teamMembersResult.success) {
+          return { success: false, error: teamMembersResult.error, matrix: [] }
+        }
+        
+        teamMembers = teamMembersResult.users
+        
+        // Cache the team members
+        teamMembersCache.value[team] = {
+          users: teamMembers,
+          timestamp: Date.now()
+        }
+      } else {
+        console.log(`✅ Using cached team members for ${team}`)
       }
 
-      // Fetch team sessions
-      const { data: sessions, error: sessionsError } = await supabase
-        .from('coaching_sessions')
-        .select('*')
-        .eq('team', team)
-        .order('date')
-
-      if (sessionsError) {
-        return { success: false, error: sessionsError.message, matrix: [] }
-      }
-
-      // Fetch attendance records for this team
-      const { data: attendance, error: attendanceError } = await supabase
-        .from('attendance_records')
-        .select('*')
-        .in('session_id', sessions.map(s => s.id))
-
-      if (attendanceError) {
-        return { success: false, error: attendanceError.message, matrix: [] }
-      }
-
-      // Build matrix
-      const matrix = users.map(user => {
-        const userSessions = sessions.map(session => {
-          const record = attendance.find(a => a.user_id === user.id && a.session_id === session.id)
+      // Build matrix using cached data
+      const matrix = teamMembers.map(user => {
+        const userSessions = teamSessions.map(session => {
+          const record = teamAttendance.find(a => a.user_id === user.id && a.session_id === session.id)
           return {
             sessionId: session.id,
             date: session.date,
@@ -249,12 +301,37 @@ export const useCoachingStore = defineStore('coaching', () => {
     } catch (error) {
       return { success: false, error: 'Failed to build attendance matrix', matrix: [] }
     }
-  })
+  }
 
   // Initialize store
   const initializeStore = async () => {
+    // Update cache timestamps from sessionStorage before checking cache
+    sessionsLastFetchTime.value = getCacheTimestamp('sessions')
+    attendanceLastFetchTime.value = getCacheTimestamp('attendance')
+    
     await fetchCoachingSessions()
     await fetchAttendanceRecords()
+  }
+
+  const refreshData = async () => {
+    try {
+      await Promise.all([
+        fetchCoachingSessions(undefined, true),
+        fetchAttendanceRecords(undefined, true)
+      ])
+      return { success: true }
+    } catch (error) {
+      console.error('Error refreshing coaching data:', error)
+      return { success: false, error: 'Failed to refresh data' }
+    }
+  }
+
+  const clearCache = () => {
+    sessionStorage.removeItem('coaching_cache_sessions')
+    sessionStorage.removeItem('coaching_cache_attendance')
+    sessionsLastFetchTime.value = Date.now() - 6 * 60 * 1000
+    attendanceLastFetchTime.value = Date.now() - 6 * 60 * 1000
+    teamMembersCache.value = {} // Clear team members cache
   }
 
   return {
@@ -266,7 +343,6 @@ export const useCoachingStore = defineStore('coaching', () => {
     sessionsByTeam,
     attendanceBySession,
     getAttendanceForUser,
-    getAttendanceMatrix,
     
     // Actions
     fetchCoachingSessions,
@@ -274,6 +350,9 @@ export const useCoachingStore = defineStore('coaching', () => {
     createCoachingSession,
     updateAttendance,
     deleteCoachingSession,
-    initializeStore
+    initializeStore,
+    refreshData,
+    clearCache,
+    getAttendanceMatrix
   }
 }) 

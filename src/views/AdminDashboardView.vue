@@ -1,13 +1,21 @@
 <template>
   <div class="admin-dashboard">
-    <MainNavigation />
-    
-    <div class="dashboard-content">
-      <div class="page-header">
-        <h1>Captain Dashboard</h1>
-        <p>Manage coaching sessions and shows for your team</p>
+    <header class="dashboard-header">
+      <div class="header-content">
+        <h1>Admin Dashboard</h1>
+        <div class="user-info">
+          <span>Welcome, {{ userStore.user?.name }}</span>
+          <span class="role-badge">{{ userStore.user?.role }}</span>
+          <span v-if="userStore.currentTeam" class="team-badge">{{ userStore.currentTeam }}</span>
+          <button @click="goToTeamDashboard" class="team-dashboard-button">
+            Team Dashboard
+          </button>
+          <button @click="handleLogout" class="logout-button">Logout</button>
+        </div>
       </div>
-      
+    </header>
+
+    <div class="dashboard-content">
       <div class="navigation-tabs">
         <button 
           :class="['tab-button', { active: activeTab === 'coaching' }]"
@@ -316,7 +324,6 @@ import { useUserStore } from '@/stores/user'
 import { useCoachingStore } from '@/stores/coaching'
 import { useShowsStore } from '@/stores/shows'
 import { format, parseISO } from 'date-fns'
-import MainNavigation from '@/components/MainNavigation.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -365,55 +372,13 @@ const allTeamShowDates = computed(() => {
   })
 })
 
-const attendanceMatrix = ref<any[]>([])
-const availabilityMatrix = ref<any[]>([])
+const attendanceMatrix = computed(() => {
+  return coachingStore.getAttendanceMatrix(userStore.currentTeam || 'Samurai')
+})
 
-// Load matrix data with caching
-const matrixCache = ref<{ attendance: any[], availability: any[], timestamp: number } | null>(null)
-const matrixCacheDuration = 5 * 60 * 1000 // 5 minutes
-
-const loadMatrixData = async () => {
-  try {
-    // Check if we have cached matrix data
-    if (matrixCache.value && (Date.now() - matrixCache.value.timestamp) < matrixCacheDuration) {
-      console.log('✅ Using cached matrix data')
-      attendanceMatrix.value = matrixCache.value.attendance
-      availabilityMatrix.value = matrixCache.value.availability
-      return
-    }
-    
-    console.log('🔄 Building fresh matrix data')
-    
-    const [attendanceResult, availabilityResult] = await Promise.all([
-      coachingStore.getAttendanceMatrix(userStore.currentTeam || 'Samurai'),
-      showsStore.getAvailabilityMatrix(userStore.currentTeam || 'Samurai')
-    ])
-    
-    if (attendanceResult.success) {
-      attendanceMatrix.value = attendanceResult.matrix
-    }
-    
-    if (availabilityResult.success) {
-      availabilityMatrix.value = availabilityResult.matrix
-    }
-    
-    // Cache the matrix data
-    matrixCache.value = {
-      attendance: attendanceMatrix.value,
-      availability: availabilityMatrix.value,
-      timestamp: Date.now()
-    }
-  } catch (error) {
-    console.error('Error loading matrix data:', error)
-  }
-}
-
-// Refresh matrix data (for manual refresh)
-const refreshMatrixData = async () => {
-  // Clear matrix cache to force fresh data
-  matrixCache.value = null
-  await loadMatrixData()
-}
+const availabilityMatrix = computed(() => {
+  return showsStore.getAvailabilityMatrix(userStore.currentTeam || 'Samurai')
+})
 
 const availableMembers = computed(() => {
   // Mock team members - in a real app, this would come from a user store
@@ -579,7 +544,14 @@ const getNextStatus = (currentStatus: string) => {
   return 'absent'
 }
 
+const handleLogout = () => {
+  userStore.logout()
+  router.push('/login')
+}
 
+const goToTeamDashboard = () => {
+  router.push('/dashboard')
+}
 
 const isMemberAssigned = (memberId: string) => {
   if (!selectedShowDate.value) return false
@@ -631,32 +603,10 @@ const saveMemberAssignments = async () => {
   showAssignMembersModal.value = false
 }
 
-onMounted(async () => {
-  console.log('🚀 CaptainDashboardView mounted')
-  
-  if (!userStore.isAuthenticated || !userStore.isCaptain) {
+onMounted(() => {
+  if (!userStore.isAuthenticated || !userStore.canAccessAdmin) {
     router.push('/login')
-    return
   }
-
-  console.log('📊 Starting store initialization...')
-  
-  // Initialize stores with cached data (will only fetch if cache is expired)
-  await Promise.all([
-    coachingStore.fetchCoachingSessions(),
-    coachingStore.fetchAttendanceRecords(),
-    showsStore.fetchShows(),
-    showsStore.fetchShowDates(),
-    showsStore.fetchShowAssignments(),
-    showsStore.fetchShowAvailability()
-  ])
-  
-  console.log('📊 Store initialization completed')
-  
-  // Load matrix data after stores are initialized
-  await loadMatrixData()
-  
-  console.log('📊 Matrix data loaded')
 })
 </script>
 
@@ -666,32 +616,86 @@ onMounted(async () => {
   background: #f8f9fa;
 }
 
+.dashboard-header {
+  background: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 20px 0;
+}
 
+.header-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
 
+.header-content h1 {
+  margin: 0;
+  color: #333;
+  font-size: 24px;
+  font-weight: 600;
+}
 
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.role-badge {
+  background: #28a745;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.team-badge {
+  background: #667eea;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.logout-button {
+  background: #e74c3c;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+}
+
+.logout-button:hover {
+  background: #c0392b;
+}
+
+.team-dashboard-button {
+  background: #17a2b8;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+}
+
+.team-dashboard-button:hover {
+  background: #138496;
+}
 
 .dashboard-content {
   max-width: 1200px;
   margin: 0 auto;
   padding: 40px 20px;
-}
-
-.page-header {
-  margin-bottom: 30px;
-  text-align: center;
-}
-
-.page-header h1 {
-  margin: 0 0 10px 0;
-  color: #333;
-  font-size: 28px;
-  font-weight: 600;
-}
-
-.page-header p {
-  margin: 0;
-  color: #666;
-  font-size: 16px;
 }
 
 .navigation-tabs {
