@@ -13,36 +13,47 @@
           <span class="team-badge">{{ userStore.currentTeam || 'No Team' }}</span>
         </div>
         
-                 <div class="nav-actions">
-           <button 
-             v-if="userStore.isCaptain || userStore.isAdmin"
-             @click="handleRefresh" 
-             class="nav-button refresh-button"
-             :disabled="isRefreshing"
-           >
-             {{ isRefreshing ? '🔄' : '🔄' }} {{ isRefreshing ? 'Refreshing...' : 'Refresh' }}
-           </button>
-           
-           <router-link
-             v-if="userStore.isAdmin && !isOnAdminPage"
-             to="/admin"
-             class="nav-button admin-button"
-           >
-             🛠️ Admin
-           </router-link>
-           
-           <router-link
-             v-if="userStore.isCaptain && !isOnCaptainPage"
-             to="/captain"
-             class="nav-button captain-button"
-           >
-             ⚡ Captain
-           </router-link>
-           
-           <button @click="handleLogout" class="nav-button logout-button">
-             Logout
-           </button>
-         </div>
+        <div class="nav-actions">
+          <!-- Back to Dashboard button (when not on dashboard) -->
+          <router-link
+            v-if="!isOnDashboardPage"
+            to="/dashboard"
+            class="nav-button dashboard-button"
+          >
+            📊 Dashboard
+          </router-link>
+          
+          <button 
+            v-if="userStore.isCaptain || userStore.isAdmin"
+            @click="handleRefresh" 
+            class="nav-button refresh-button"
+            :disabled="isRefreshing"
+            :title="isRefreshing ? 'Refreshing...' : 'Refresh Data'"
+          >
+            {{ isRefreshing ? '🔄' : '🔄' }}
+            <span class="button-text">{{ isRefreshing ? 'Refreshing...' : 'Refresh' }}</span>
+          </button>
+          
+          <router-link
+            v-if="userStore.isAdmin && !isOnAdminPage"
+            to="/admin"
+            class="nav-button admin-button"
+          >
+            🛠️ <span class="button-text">Admin</span>
+          </router-link>
+          
+          <router-link
+            v-if="userStore.isCaptain && !isOnCaptainPage"
+            to="/captain"
+            class="nav-button captain-button"
+          >
+            ⚡ <span class="button-text">Captain</span>
+          </router-link>
+          
+          <button @click="handleLogout" class="nav-button logout-button" title="Logout">
+            🚪 <span class="button-text">Logout</span>
+          </button>
+        </div>
       </div>
     </div>
   </nav>
@@ -65,6 +76,7 @@ const isRefreshing = ref(false)
 
 const isOnAdminPage = computed(() => route.path === '/admin')
 const isOnCaptainPage = computed(() => route.path === '/captain')
+const isOnDashboardPage = computed(() => route.path === '/dashboard')
 
 const handleRefresh = async () => {
   if (isRefreshing.value) return
@@ -132,6 +144,17 @@ const handleLogout = () => {
   color: #3498db;
 }
 
+.dashboard-button {
+  background: #27ae60;
+  color: white;
+}
+
+.dashboard-button:hover {
+  background: #229954;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
 .nav-right {
   display: flex;
   align-items: center;
@@ -176,6 +199,11 @@ const handleLogout = () => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
+}
+
+.button-text {
+  display: inline;
 }
 
 .admin-button {
@@ -236,7 +264,7 @@ const handleLogout = () => {
   }
   
   .nav-right {
-    gap: 15px;
+    gap: 10px;
   }
   
   .user-info {
@@ -258,13 +286,17 @@ const handleLogout = () => {
   }
   
   .nav-actions {
-    gap: 8px;
+    gap: 6px;
   }
 }
 
-@media (max-width: 480px) {
-  .nav-brand {
-    font-size: 1.1em;
+@media (max-width: 640px) {
+  .nav-container {
+    padding: 0 10px;
+  }
+  
+  .nav-right {
+    gap: 8px;
   }
   
   .user-name {
@@ -274,6 +306,35 @@ const handleLogout = () => {
   .nav-button {
     padding: 6px 10px;
     font-size: 12px;
+  }
+  
+  .nav-actions {
+    gap: 4px;
+  }
+  
+  .button-text {
+    display: none;
+  }
+  
+  .nav-button {
+    min-width: 36px;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .nav-brand {
+    font-size: 1em;
+  }
+  
+  .team-badge {
+    display: none;
+  }
+  
+  .nav-button {
+    padding: 6px 8px;
+    font-size: 11px;
+    min-width: 32px;
   }
 }
 </style>

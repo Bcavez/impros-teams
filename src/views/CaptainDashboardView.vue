@@ -50,7 +50,7 @@
                       'attendance-cell',
                       `status-${session.status}`
                     ]"
-                    @click="toggleAttendance(member.userId, session.sessionId, session.status)"
+                    @click="openAttendanceModal(member.userId, session.sessionId, session.status, session.date, member.userName)"
                   >
                     {{ getStatusLabel(session.status) }}
                   </td>
@@ -97,7 +97,7 @@
               <h3>{{ show.name }}</h3>
               <div v-for="showDate in getShowDates(show.id)" :key="showDate.id" class="show-date-info">
                 <span class="date">{{ formatDate(showDate.date) }}</span>
-                <span class="members">{{ showDate.assignedMembers.length }}/5 members</span>
+                <span class="members">{{ getAssignedMembers(showDate.id).length }}/5 members</span>
               </div>
             </div>
             <div class="show-actions">
@@ -283,17 +283,24 @@
             <label>Available Members</label>
             <div class="members-list">
                              <div 
-                 v-for="member in availableMembers" 
+                 v-for="member in availableMembersForShow" 
                  :key="member.id" 
                  class="member-item"
-                 :class="{ 'assigned': selectedMembers.includes(member.id) }"
+                 :class="{ 
+                   'assigned': selectedMembers.includes(member.id),
+                   'available': member.availability === 'present',
+                   'unavailable': member.availability === 'absent',
+                   'undecided': member.availability === 'undecided'
+                 }"
                  @click="toggleMemberAssignment(member.id)"
                >
-                 <span class="member-name">{{ member.name }}</span>
-                 <span class="member-status">
-                   {{ selectedMembers.includes(member.id) ? 'Selected' : 'Available' }}
-                 </span>
-               </div>
+                <span class="member-name">{{ member.name }}</span>
+                <span class="member-status">
+                  {{ selectedMembers.includes(member.id) ? 'Selected' : 
+                     member.availability === 'absent' ? 'Unavailable' : 
+                     member.availability === 'present' ? 'Available' : 'Undecided' }}
+                </span>
+              </div>
             </div>
           </div>
           <div class="modal-actions">
@@ -303,6 +310,49 @@
             <button type="button" @click="saveMemberAssignments" class="primary-button">
               Save Assignments
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status Modal -->
+      <div v-if="showStatusModal" class="modal-overlay" @click="closeStatusModal">
+        <div class="modal-content" @click.stop>
+          <div class="modal-header">
+            <h3>Update Attendance</h3>
+            <button @click="closeStatusModal" class="modal-close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <p class="modal-date">{{ formatModalDate(selectedEvent?.date) }}</p>
+            <p class="modal-title">{{ selectedEvent?.title }}</p>
+            
+            <div class="status-section">
+              <h4>Coaching Session</h4>
+              <div class="status-buttons">
+                <button 
+                  :class="['status-button', { active: selectedAttendanceStatus === 'present' }]"
+                  @click="selectedAttendanceStatus = 'present'"
+                >
+                  Present
+                </button>
+                <button 
+                  :class="['status-button', { active: selectedAttendanceStatus === 'absent' }]"
+                  @click="selectedAttendanceStatus = 'absent'"
+                >
+                  Absent
+                </button>
+                <button 
+                  :class="['status-button', { active: selectedAttendanceStatus === 'undecided' }]"
+                  @click="selectedAttendanceStatus = 'undecided'"
+                >
+                  Undecided
+                </button>
+              </div>
+            </div>
+            
+            <div class="modal-actions">
+              <button @click="closeStatusModal" class="cancel-button">Cancel</button>
+              <button @click="confirmAttendanceUpdate" class="confirm-button">Confirm</button>
+            </div>
           </div>
         </div>
       </div>
@@ -331,6 +381,9 @@ const showCreateShowModal = ref(false)
 const showCreateShowDateModal = ref(false)
 const showUpdateShowDateModal = ref(false)
 const showAssignMembersModal = ref(false)
+const showStatusModal = ref(false)
+const selectedEvent = ref<any>(null)
+const selectedAttendanceStatus = ref<'present' | 'absent' | 'undecided'>('present')
 
 // Form data
 const newCoachingDate = ref('')
@@ -351,7 +404,8 @@ const selectedShowDate = ref<any>(null)
 
 // Computed properties
 const teamCoachingSessions = computed(() => {
-  return coachingStore.sessionsByTeam(userStore.currentTeam || 'Samurai')
+  const sessions = coachingStore.sessionsByTeam(userStore.currentTeam || 'Samurai')
+  return sessions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) // Sort by date, oldest first
 })
 
 const teamShows = computed(() => {
@@ -376,21 +430,25 @@ const loadMatrixData = async () => {
   try {
     // Check if we have cached matrix data
     if (matrixCache.value && (Date.now() - matrixCache.value.timestamp) < matrixCacheDuration) {
-      console.log('✅ Using cached matrix data')
       attendanceMatrix.value = matrixCache.value.attendance
       availabilityMatrix.value = matrixCache.value.availability
       return
     }
     
-    console.log('🔄 Building fresh matrix data')
-    
+    // Use cached store data - don't force refresh
     const [attendanceResult, availabilityResult] = await Promise.all([
       coachingStore.getAttendanceMatrix(userStore.currentTeam || 'Samurai'),
       showsStore.getAvailabilityMatrix(userStore.currentTeam || 'Samurai')
     ])
     
     if (attendanceResult.success) {
-      attendanceMatrix.value = attendanceResult.matrix
+      // Sort the matrix data by session date (oldest first)
+      attendanceMatrix.value = attendanceResult.matrix.map(member => ({
+        ...member,
+        sessions: member.sessions.sort((a: any, b: any) => 
+          new Date(a.date).getTime() - new Date(b.date).getTime()
+        )
+      }))
     }
     
     if (availabilityResult.success) {
@@ -415,16 +473,37 @@ const refreshMatrixData = async () => {
   await loadMatrixData()
 }
 
-const availableMembers = computed(() => {
-  // Mock team members - in a real app, this would come from a user store
-  const teamMembers = [
-    { id: '5', name: 'Samurai Member', team: 'Samurai' },
-    { id: '6', name: 'Samurai Member 2', team: 'Samurai' },
-    { id: '7', name: 'Gladiator Member', team: 'Gladiator' },
-    { id: '8', name: 'Viking Member', team: 'Viking' }
-  ]
+const availableMembers = ref<any[]>([])
+
+const loadTeamMembers = async () => {
+  // Check if team members are cached for this team
+  const teamMembersCacheKey = `team_members_${userStore.currentTeam}`
+  const cachedTeamMembers = sessionStorage.getItem(teamMembersCacheKey)
   
-  return teamMembers.filter(member => member.team === userStore.currentTeam)
+  if (cachedTeamMembers) {
+    availableMembers.value = JSON.parse(cachedTeamMembers)
+    return
+  }
+  
+  // Fetch team members if not cached
+  const teamMembersResult = await userStore.getUsersByTeam(userStore.currentTeam || 'Samurai')
+  if (teamMembersResult.success) {
+    availableMembers.value = teamMembersResult.users
+    // Cache the team members
+    sessionStorage.setItem(teamMembersCacheKey, JSON.stringify(teamMembersResult.users))
+  }
+}
+
+const availableMembersForShow = computed(() => {
+  if (!selectedShowDate.value) return []
+  
+  return availableMembers.value.map(member => {
+    const availability = showsStore.getAvailabilityForUser(member.id, selectedShowDate.value.id)
+    return {
+      ...member,
+      availability
+    }
+  })
 })
 
 const selectedMembers = ref<string[]>([])
@@ -447,15 +526,22 @@ const getAttendanceSummary = (memberId: string) => {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   
-  // Get all coaching sessions up until today for the current team
-  const sessionsUpToToday = teamCoachingSessions.value.filter(session => {
-    return parseISO(session.date) <= today
+  // Find the member in the attendance matrix
+  const member = attendanceMatrix.value.find(m => m.userId === memberId)
+  
+  if (!member) {
+    return '0/0'
+  }
+  
+  // Get all sessions up until today
+  const sessionsUpToToday = member.sessions.filter(session => {
+    const sessionDate = parseISO(session.date)
+    return sessionDate <= today
   })
   
   // Count sessions where member was present
   const presentCount = sessionsUpToToday.filter(session => {
-    const status = coachingStore.getAttendanceForUser(memberId, session.id)
-    return status === 'present'
+    return session.status === 'present'
   }).length
   
   return `${presentCount}/${sessionsUpToToday.length}`
@@ -463,6 +549,11 @@ const getAttendanceSummary = (memberId: string) => {
 
 const getShowDates = (showId: string) => {
   return showsStore.datesByShow(showId)
+}
+
+const getAssignedMembers = (showDateId: string) => {
+  const members = showsStore.getAssignedMembers(showDateId)
+  return members || []
 }
 
 const getShowName = (showId: string) => {
@@ -563,6 +654,44 @@ const deleteShowDate = async (showDateId: string) => {
   }
 }
 
+const openAttendanceModal = (userId: string, sessionId: string, currentStatus: string, sessionDate: string, memberName: string) => {
+  selectedEvent.value = {
+    type: 'coaching',
+    date: sessionDate,
+    title: `Coaching Session - ${memberName}`,
+    userId,
+    sessionId
+  }
+  selectedAttendanceStatus.value = currentStatus as 'present' | 'absent' | 'undecided'
+  showStatusModal.value = true
+}
+
+const closeStatusModal = () => {
+  showStatusModal.value = false
+  selectedEvent.value = null
+  selectedAttendanceStatus.value = 'present'
+}
+
+const confirmAttendanceUpdate = async () => {
+  if (!selectedEvent.value) return
+
+  await coachingStore.updateAttendance(
+    selectedEvent.value.userId,
+    selectedEvent.value.sessionId,
+    selectedAttendanceStatus.value
+  )
+
+  // Force refresh attendance records and matrix data
+  await coachingStore.fetchAttendanceRecords(undefined, true)
+  await refreshMatrixData()
+  
+  closeStatusModal()
+}
+
+const formatModalDate = (dateStr: string) => {
+  return format(parseISO(dateStr), 'EEEE, MMMM dd, yyyy')
+}
+
 const toggleAttendance = async (userId: string, sessionId: string, currentStatus: string) => {
   const nextStatus = getNextStatus(currentStatus)
   await coachingStore.updateAttendance(userId, sessionId, nextStatus)
@@ -583,7 +712,8 @@ const getNextStatus = (currentStatus: string) => {
 
 const isMemberAssigned = (memberId: string) => {
   if (!selectedShowDate.value) return false
-  return selectedShowDate.value.assignedMembers.includes(memberId)
+  const assignedMembers = getAssignedMembers(selectedShowDate.value.id)
+  return assignedMembers.includes(memberId)
 }
 
 const toggleMemberAssignment = (memberId: string) => {
@@ -603,7 +733,8 @@ const openAssignMembersModal = (showDate: any) => {
 
 const initializeSelectedMembers = () => {
   if (selectedShowDate.value) {
-    selectedMembers.value = [...selectedShowDate.value.assignedMembers]
+    const assignedMembers = getAssignedMembers(selectedShowDate.value.id)
+    selectedMembers.value = [...assignedMembers]
   }
 }
 
@@ -611,7 +742,7 @@ const saveMemberAssignments = async () => {
   if (!selectedShowDate.value) return
   
   // Get current assignments
-  const currentAssignments = selectedShowDate.value.assignedMembers || []
+  const currentAssignments = getAssignedMembers(selectedShowDate.value.id)
   
   // Remove members that are no longer selected
   for (const memberId of currentAssignments) {
@@ -632,31 +763,25 @@ const saveMemberAssignments = async () => {
 }
 
 onMounted(async () => {
-  console.log('🚀 CaptainDashboardView mounted')
-  
   if (!userStore.isAuthenticated || !userStore.isCaptain) {
     router.push('/login')
     return
   }
 
-  console.log('📊 Starting store initialization...')
+  // Check if stores have been initialized in this session
+  const storesInitialized = sessionStorage.getItem('stores_initialized')
   
-  // Initialize stores with cached data (will only fetch if cache is expired)
+  if (!storesInitialized) {
+    console.warn('⚠️ Stores not initialized, redirecting to login...')
+    router.push('/login')
+    return
+  }
+  
+  // Load team members and matrix data
   await Promise.all([
-    coachingStore.fetchCoachingSessions(),
-    coachingStore.fetchAttendanceRecords(),
-    showsStore.fetchShows(),
-    showsStore.fetchShowDates(),
-    showsStore.fetchShowAssignments(),
-    showsStore.fetchShowAvailability()
+    loadTeamMembers(),
+    loadMatrixData()
   ])
-  
-  console.log('📊 Store initialization completed')
-  
-  // Load matrix data after stores are initialized
-  await loadMatrixData()
-  
-  console.log('📊 Matrix data loaded')
 })
 </script>
 
@@ -1058,12 +1183,18 @@ onMounted(async () => {
   background: #e9ecef;
 }
 
-.member-item.assigned {
+.member-item.assigned,
+.member-item.assigned.unavailable,
+.member-item.assigned.available,
+.member-item.assigned.undecided {
   background: #d4edda;
   color: #155724;
 }
 
-.member-item.assigned:hover {
+.member-item.assigned:hover,
+.member-item.assigned.unavailable:hover,
+.member-item.assigned.available:hover,
+.member-item.assigned.undecided:hover {
   background: #c3e6cb;
 }
 
@@ -1080,6 +1211,151 @@ onMounted(async () => {
 }
 
 .member-item.assigned .member-status {
+  background: #28a745;
+}
+
+.member-item.unavailable {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.member-item.unavailable:hover {
+  background: #f5c6cb;
+}
+
+.member-item.unavailable .member-status {
+  background: #dc3545;
+}
+
+/* Status Modal Styles */
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 30px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #333;
+  font-size: 18px;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+}
+
+.modal-close:hover {
+  color: #333;
+}
+
+.modal-body {
+  padding: 30px;
+}
+
+.modal-date {
+  margin: 0 0 10px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.modal-title {
+  margin: 0 0 20px 0;
+  color: #333;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.status-section h4 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.status-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.status-button {
+  padding: 10px 20px;
+  border: 2px solid #e9ecef;
+  background: white;
+  color: #333;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.status-button:hover {
+  border-color: #007bff;
+}
+
+.status-button.active {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.confirm-button {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+}
+
+.confirm-button:hover {
+  background: #218838;
+}
+
+.member-item.undecided {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.member-item.undecided:hover {
+  background: #ffeaa7;
+}
+
+.member-item.undecided .member-status {
+  background: #ffc107;
+}
+
+.member-item.available {
+  background: #d4edda;
+  color: #155724;
+}
+
+.member-item.available:hover {
+  background: #c3e6cb;
+}
+
+.member-item.available .member-status {
   background: #28a745;
 }
 

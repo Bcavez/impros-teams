@@ -243,23 +243,51 @@ const getShowName = (showId: string) => {
 }
 
 const getAssignedMembers = (showDateId: string) => {
-  return showsStore.getAssignedMembers(showDateId)
+  const members = showsStore.getAssignedMembers(showDateId)
+  return members || []
+}
+
+const teamMembers = ref<any[]>([])
+
+const loadTeamMembers = async () => {
+  // Check if team members are cached for this team
+  const teamMembersCacheKey = `team_members_${userStore.currentTeam}`
+  const cachedTeamMembers = sessionStorage.getItem(teamMembersCacheKey)
+  
+  if (cachedTeamMembers) {
+    teamMembers.value = JSON.parse(cachedTeamMembers)
+    return
+  }
+  
+  // Fetch team members if not cached
+  const teamMembersResult = await userStore.getUsersByTeam(userStore.currentTeam || 'Samurai')
+  if (teamMembersResult.success) {
+    teamMembers.value = teamMembersResult.users
+    // Cache the team members
+    sessionStorage.setItem(teamMembersCacheKey, JSON.stringify(teamMembersResult.users))
+  }
+}
+
+const checkStoresInitialized = () => {
+  // Check if stores have been initialized in this session
+  const storesInitialized = sessionStorage.getItem('stores_initialized')
+  
+  if (!storesInitialized) {
+    console.warn('⚠️ Stores not initialized, redirecting to login...')
+    router.push('/login')
+    return false
+  }
+  
+  return true
 }
 
 const getMemberNames = (memberIds: string[]) => {
-  const mockUsers = [
-    { id: '1', name: 'Admin User' },
-    { id: '2', name: 'Samurai Captain' },
-    { id: '3', name: 'Gladiator Captain' },
-    { id: '4', name: 'Viking Captain' },
-    { id: '5', name: 'Samurai Member' },
-    { id: '6', name: 'Samurai Member 2' },
-    { id: '7', name: 'Gladiator Member' },
-    { id: '8', name: 'Viking Member' }
-  ]
+  if (!memberIds || !Array.isArray(memberIds)) {
+    return []
+  }
   
   return memberIds.map(id => {
-    const user = mockUsers.find(u => u.id === id)
+    const user = teamMembers.value.find(u => u.id === id)
     return user?.name || 'Unknown Member'
   })
 }
@@ -354,12 +382,17 @@ onMounted(async () => {
     return
   }
 
-  // Initialize stores with cached data (will only fetch if cache is expired)
-  await Promise.all([
-    coachingStore.fetchCoachingSessions(),
-    coachingStore.fetchAttendanceRecords(),
-    showsStore.initializeStore()
-  ])
+  try {
+    // Check if stores are initialized
+    if (!checkStoresInitialized()) {
+      return
+    }
+    
+    // Load team members separately to avoid blocking the main data
+    await loadTeamMembers()
+  } catch (error) {
+    console.error('Error loading dashboard data:', error)
+  }
 })
 </script>
 

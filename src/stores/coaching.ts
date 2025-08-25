@@ -32,12 +32,7 @@ export const useCoachingStore = defineStore('coaching', () => {
   const attendanceLastFetchTime = ref<number>(getCacheTimestamp('attendance'))
   const cacheDuration = 5 * 60 * 1000 // 5 minutes in milliseconds
   
-  console.log('🏪 Coaching store initialized with cache timestamps:', {
-    sessions: sessionsLastFetchTime.value,
-    attendance: attendanceLastFetchTime.value,
-    sessionsAge: Date.now() - sessionsLastFetchTime.value,
-    attendanceAge: Date.now() - attendanceLastFetchTime.value
-  })
+
 
   // Computed properties
   const sessionsByTeam = computed(() => (team: 'Samurai' | 'Gladiator' | 'Viking') => {
@@ -58,15 +53,11 @@ export const useCoachingStore = defineStore('coaching', () => {
   // Actions
   const fetchCoachingSessions = async (team?: 'Samurai' | 'Gladiator' | 'Viking', forceRefresh = false) => {
     const timeSinceLastFetch = Date.now() - sessionsLastFetchTime.value
-    console.log(`🔍 Coaching sessions cache check: ${timeSinceLastFetch}ms since last fetch, cache duration: ${cacheDuration}ms, forceRefresh: ${forceRefresh}`)
     
     // Check cache if not forcing refresh
     if (!forceRefresh && timeSinceLastFetch < cacheDuration) {
-      console.log('✅ Coaching sessions: Using cached data')
       return { success: true, sessions: coachingSessions.value, cached: true }
     }
-    
-    console.log('🔄 Coaching sessions: Fetching fresh data')
 
     try {
       let query = supabase
@@ -245,8 +236,12 @@ export const useCoachingStore = defineStore('coaching', () => {
   const getAttendanceMatrix = async (team: 'Samurai' | 'Gladiator' | 'Viking') => {
     try {
       // Use cached data from the store instead of making new database calls
-      const teamSessions = coachingSessions.value.filter(session => session.team === team)
+      const teamSessions = coachingSessions.value
+        .filter(session => session.team === team)
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) // Sort by date, oldest first
+      
       const sessionIds = teamSessions.map(s => s.id)
+      
       const teamAttendance = attendanceRecords.value.filter(record => 
         sessionIds.includes(record.session_id)
       )
@@ -258,7 +253,6 @@ export const useCoachingStore = defineStore('coaching', () => {
       
       // If no cached data or cache expired, fetch team members
       if (teamMembers.length === 0 || teamMembersAge > teamMembersCacheDuration) {
-        console.log(`🔄 Fetching team members for ${team}`)
         const { useUserStore } = await import('./user')
         const userStore = useUserStore()
         
@@ -274,8 +268,6 @@ export const useCoachingStore = defineStore('coaching', () => {
           users: teamMembers,
           timestamp: Date.now()
         }
-      } else {
-        console.log(`✅ Using cached team members for ${team}`)
       }
 
       // Build matrix using cached data
@@ -303,14 +295,13 @@ export const useCoachingStore = defineStore('coaching', () => {
     }
   }
 
-  // Initialize store
+  // Initialize store - only update timestamps, don't fetch data
   const initializeStore = async () => {
-    // Update cache timestamps from sessionStorage before checking cache
+    // Update cache timestamps from sessionStorage
     sessionsLastFetchTime.value = getCacheTimestamp('sessions')
     attendanceLastFetchTime.value = getCacheTimestamp('attendance')
     
-    await fetchCoachingSessions()
-    await fetchAttendanceRecords()
+    // Don't fetch data automatically - let views request it when needed
   }
 
   const refreshData = async () => {

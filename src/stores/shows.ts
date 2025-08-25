@@ -30,32 +30,18 @@ export const useShowsStore = defineStore('shows', () => {
   const availabilityLastFetchTime = ref<number>(getCacheTimestamp('availability'))
   const cacheDuration = 5 * 60 * 1000 // 5 minutes in milliseconds
   
-  console.log('🏪 Shows store initialized with cache timestamps:', {
-    shows: showsLastFetchTime.value,
-    showDates: showDatesLastFetchTime.value,
-    assignments: assignmentsLastFetchTime.value,
-    availability: availabilityLastFetchTime.value,
-    showsAge: Date.now() - showsLastFetchTime.value,
-    showDatesAge: Date.now() - showDatesLastFetchTime.value,
-    assignmentsAge: Date.now() - assignmentsLastFetchTime.value,
-    availabilityAge: Date.now() - availabilityLastFetchTime.value
-  })
 
-  // Initialize store with data from Supabase
+
+  // Initialize store - only update timestamps, don't fetch data
   const initializeStore = async () => {
     try {
-      // Update cache timestamps from sessionStorage before checking cache
+      // Update cache timestamps from sessionStorage
       showsLastFetchTime.value = getCacheTimestamp('shows')
       showDatesLastFetchTime.value = getCacheTimestamp('showDates')
       assignmentsLastFetchTime.value = getCacheTimestamp('assignments')
       availabilityLastFetchTime.value = getCacheTimestamp('availability')
       
-      await Promise.all([
-        fetchShows(),
-        fetchShowDates(),
-        fetchShowAssignments(),
-        fetchShowAvailability()
-      ])
+      // Don't fetch data automatically - let views request it when needed
     } catch (error) {
       console.error('Failed to initialize shows store:', error)
     }
@@ -64,15 +50,11 @@ export const useShowsStore = defineStore('shows', () => {
   // Fetch functions
   const fetchShows = async (forceRefresh = false) => {
     const timeSinceLastFetch = Date.now() - showsLastFetchTime.value
-    console.log(`🔍 Shows cache check: ${timeSinceLastFetch}ms since last fetch, cache duration: ${cacheDuration}ms, forceRefresh: ${forceRefresh}`)
     
     // Check cache if not forcing refresh
     if (!forceRefresh && timeSinceLastFetch < cacheDuration) {
-      console.log('✅ Shows: Using cached data')
       return { success: true, shows: shows.value, cached: true }
     }
-    
-    console.log('🔄 Shows: Fetching fresh data')
 
     const { data, error } = await supabase
       .from('shows')

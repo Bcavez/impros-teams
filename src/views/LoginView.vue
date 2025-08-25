@@ -115,9 +115,13 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { useCoachingStore } from '@/stores/coaching'
+import { useShowsStore } from '@/stores/shows'
 
 const router = useRouter()
 const userStore = useUserStore()
+const coachingStore = useCoachingStore()
+const showsStore = useShowsStore()
 
 const activeTab = ref<'login' | 'register'>('login')
 const isLoading = ref(false)
@@ -144,6 +148,26 @@ const handleLogin = async () => {
     const result = await userStore.login(loginForm.name, loginForm.password)
     
     if (result.success) {
+      // Initialize stores after successful login
+      console.log('🔄 Initializing stores after login...')
+      await Promise.all([
+        coachingStore.fetchCoachingSessions(undefined, true),
+        coachingStore.fetchAttendanceRecords(undefined, true),
+        showsStore.fetchShows(true),
+        showsStore.fetchShowDates(true),
+        showsStore.fetchShowAssignments(true),
+        showsStore.fetchShowAvailability(true)
+      ])
+      
+      // Cache team members for the user's team
+      const teamMembersResult = await userStore.getUsersByTeam(userStore.currentTeam || 'Samurai')
+      if (teamMembersResult.success) {
+        const teamMembersCacheKey = `team_members_${userStore.currentTeam}`
+        sessionStorage.setItem(teamMembersCacheKey, JSON.stringify(teamMembersResult.users))
+      }
+      
+      sessionStorage.setItem('stores_initialized', 'true')
+      
       router.push('/dashboard')
     } else {
       loginError.value = result.error || 'Login failed'
@@ -172,10 +196,30 @@ const handleRegister = async () => {
     )
     
     if (result.success) {
+      // Initialize stores after successful registration
+      console.log('🔄 Initializing stores after registration...')
+      await Promise.all([
+        coachingStore.fetchCoachingSessions(undefined, true),
+        coachingStore.fetchAttendanceRecords(undefined, true),
+        showsStore.fetchShows(true),
+        showsStore.fetchShowDates(true),
+        showsStore.fetchShowAssignments(true),
+        showsStore.fetchShowAvailability(true)
+      ])
+      
+      // Cache team members for the user's team
+      const teamMembersResult = await userStore.getUsersByTeam(userStore.currentTeam || 'Samurai')
+      if (teamMembersResult.success) {
+        const teamMembersCacheKey = `team_members_${userStore.currentTeam}`
+        sessionStorage.setItem(teamMembersCacheKey, JSON.stringify(teamMembersResult.users))
+      }
+      
+      sessionStorage.setItem('stores_initialized', 'true')
+      
       router.push('/dashboard')
-         } else {
-       registerError.value = 'Registration failed'
-     }
+    } else {
+      registerError.value = 'Registration failed'
+    }
   } catch (error) {
     registerError.value = 'An error occurred during registration'
   } finally {
