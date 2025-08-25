@@ -1,14 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { supabase } from '@/lib/supabase'
+import type { Database } from '@/lib/supabase'
 
-export interface User {
-  id: string
-  name: string
-  email: string
-  role: 'admin' | 'captain' | 'member'
-  team: 'Samurai' | 'Gladiator' | 'Viking' | null
-  isCaptain: boolean
-}
+type User = Database['public']['Tables']['users']['Row']
 
 export interface AuthState {
   user: User | null
@@ -21,89 +16,34 @@ export const useUserStore = defineStore('user', () => {
 
   // Computed properties
   const isAdmin = computed(() => user.value?.role === 'admin')
-  const isCaptain = computed(() => user.value?.role === 'captain' || user.value?.isCaptain)
+  const isCaptain = computed(() => user.value?.role === 'captain' || user.value?.is_captain)
   const canAccessAdmin = computed(() => isAdmin.value || isCaptain.value)
   const currentTeam = computed(() => user.value?.team)
 
   // Actions
   const login = async (email: string, password: string) => {
-    // In a real app, this would make an API call
-    // For demo purposes, we'll simulate authentication
-    const mockUsers: User[] = [
-      {
-        id: '1',
-        name: 'Admin User',
-        email: 'admin@example.com',
-        role: 'admin',
-        team: null,
-        isCaptain: false
-      },
-      {
-        id: '2',
-        name: 'Samurai Captain',
-        email: 'samurai@example.com',
-        role: 'captain',
-        team: 'Samurai',
-        isCaptain: true
-      },
-      {
-        id: '3',
-        name: 'Gladiator Captain',
-        email: 'gladiator@example.com',
-        role: 'captain',
-        team: 'Gladiator',
-        isCaptain: true
-      },
-      {
-        id: '4',
-        name: 'Viking Captain',
-        email: 'viking@example.com',
-        role: 'captain',
-        team: 'Viking',
-        isCaptain: true
-      },
-      {
-        id: '5',
-        name: 'Samurai Member',
-        email: 'member1@example.com',
-        role: 'member',
-        team: 'Samurai',
-        isCaptain: false
-      },
-      {
-        id: '6',
-        name: 'Samurai Member 2',
-        email: 'member2@example.com',
-        role: 'member',
-        team: 'Samurai',
-        isCaptain: false
-      },
-      {
-        id: '7',
-        name: 'Gladiator Member',
-        email: 'member3@example.com',
-        role: 'member',
-        team: 'Gladiator',
-        isCaptain: false
-      },
-      {
-        id: '8',
-        name: 'Viking Member',
-        email: 'member4@example.com',
-        role: 'member',
-        team: 'Viking',
-        isCaptain: false
-      }
-    ]
+    try {
+      // For now, we'll use a simple email lookup since we haven't set up auth yet
+      // In a real implementation, you'd use Supabase Auth
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .single()
 
-    const foundUser = mockUsers.find(u => u.email === email)
-    
-    if (foundUser) {
-      user.value = foundUser
-      isAuthenticated.value = true
-      return { success: true, user: foundUser }
-    } else {
-      return { success: false, error: 'Invalid credentials' }
+      if (error) {
+        return { success: false, error: 'Invalid credentials' }
+      }
+
+      if (data) {
+        user.value = data
+        isAuthenticated.value = true
+        return { success: true, user: data }
+      } else {
+        return { success: false, error: 'Invalid credentials' }
+      }
+    } catch (error) {
+      return { success: false, error: 'Login failed' }
     }
   }
 
@@ -113,45 +53,143 @@ export const useUserStore = defineStore('user', () => {
   }
 
   const register = async (name: string, email: string, password: string) => {
-    // In a real app, this would make an API call
-    const newUser: User = {
-      id: Date.now().toString(),
-      name,
-      email,
-      role: 'member',
-      team: null,
-      isCaptain: false
+    try {
+      const newUser = {
+        name,
+        email,
+        role: 'member' as const,
+        team: null,
+        is_captain: false
+      }
+
+      const { data, error } = await supabase
+        .from('users')
+        .insert(newUser)
+        .select()
+        .single()
+
+      if (error) {
+        return { success: false, error: error.message }
+      }
+
+      if (data) {
+        user.value = data
+        isAuthenticated.value = true
+        return { success: true, user: data }
+      }
+
+      return { success: false, error: 'Registration failed' }
+    } catch (error) {
+      return { success: false, error: 'Registration failed' }
     }
-    
-    user.value = newUser
-    isAuthenticated.value = true
-    return { success: true, user: newUser }
   }
 
   const updateProfile = async (updates: Partial<User>) => {
-    if (user.value) {
-      user.value = { ...user.value, ...updates }
-      return { success: true, user: user.value }
+    if (!user.value) {
+      return { success: false, error: 'No user logged in' }
     }
-    return { success: false, error: 'No user logged in' }
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .update(updates)
+        .eq('id', user.value.id)
+        .select()
+        .single()
+
+      if (error) {
+        return { success: false, error: error.message }
+      }
+
+      if (data) {
+        user.value = data
+        return { success: true, user: data }
+      }
+
+      return { success: false, error: 'Update failed' }
+    } catch (error) {
+      return { success: false, error: 'Update failed' }
+    }
   }
 
-  const assignTeam = (userId: string, team: 'Samurai' | 'Gladiator' | 'Viking') => {
-    // This would typically be an admin/captain action
-    if (user.value && (isAdmin.value || (isCaptain.value && user.value.team === team))) {
-      // In a real app, this would update the user in the database
-      return { success: true }
+  const assignTeam = async (userId: string, team: 'Samurai' | 'Gladiator' | 'Viking') => {
+    if (!user.value || (!isAdmin.value && !(isCaptain.value && user.value.team === team))) {
+      return { success: false, error: 'Unauthorized' }
     }
-    return { success: false, error: 'Unauthorized' }
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ team })
+        .eq('id', userId)
+
+      if (error) {
+        return { success: false, error: error.message }
+      }
+
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: 'Assignment failed' }
+    }
   }
 
-  const assignCaptainRole = (userId: string, team: 'Samurai' | 'Gladiator' | 'Viking') => {
-    // Only admins can assign captain role
-    if (isAdmin.value) {
-      // In a real app, this would update the user in the database
-      return { success: true }
+  const assignCaptainRole = async (userId: string, team: 'Samurai' | 'Gladiator' | 'Viking') => {
+    if (!isAdmin.value) {
+      return { success: false, error: 'Only admins can assign captain role' }
     }
-    return { success: false, error: 'Only admins can assign captain role' }
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ 
+          role: 'captain',
+          team,
+          is_captain: true 
+        })
+        .eq('id', userId)
+
+      if (error) {
+        return { success: false, error: error.message }
+      }
+
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: 'Role assignment failed' }
+    }
+  }
+
+  const getUsersByTeam = async (team: 'Samurai' | 'Gladiator' | 'Viking') => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('team', team)
+
+      if (error) {
+        return { success: false, error: error.message, users: [] }
+      }
+
+      return { success: true, users: data || [] }
+    } catch (error) {
+      return { success: false, error: 'Failed to fetch users', users: [] }
+    }
+  }
+
+  const getAllUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .order('name')
+
+      if (error) {
+        return { success: false, error: error.message, users: [] }
+      }
+
+      return { success: true, users: data || [] }
+    } catch (error) {
+      return { success: false, error: 'Failed to fetch users', users: [] }
+    }
   }
 
   return {
@@ -171,6 +209,8 @@ export const useUserStore = defineStore('user', () => {
     register,
     updateProfile,
     assignTeam,
-    assignCaptainRole
+    assignCaptainRole,
+    getUsersByTeam,
+    getAllUsers
   }
 }) 

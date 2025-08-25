@@ -11,4 +11,9 @@ const app = createApp(App)
 app.use(createPinia())
 app.use(router)
 
+// Initialize stores after app is created
+const { useCoachingStore } = await import('./stores/coaching')
+const coachingStore = useCoachingStore()
+await coachingStore.initializeStore()
+
 app.mount('#app')

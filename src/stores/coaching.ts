@@ -1,22 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { format, parseISO } from 'date-fns'
+import { supabase } from '@/lib/supabase'
+import type { Database } from '@/lib/supabase'
 
-export interface CoachingSession {
-  id: string
-  date: string
-  team: 'Samurai' | 'Gladiator' | 'Viking'
-  coach: string
-  createdBy: string
-  createdAt: string
-}
-
-export interface AttendanceStatus {
-  userId: string
-  sessionId: string
-  status: 'absent' | 'present' | 'undecided'
-  updatedAt: string
-}
+type CoachingSession = Database['public']['Tables']['coaching_sessions']['Row']
+type AttendanceStatus = Database['public']['Tables']['attendance_records']['Row']
 
 export interface AttendanceRecord {
   userId: string
@@ -29,414 +18,244 @@ export const useCoachingStore = defineStore('coaching', () => {
   const coachingSessions = ref<CoachingSession[]>([])
   const attendanceRecords = ref<AttendanceStatus[]>([])
 
-  // Mock data for demo
-  const mockSessions: CoachingSession[] = [
-    {
-      id: '1',
-      date: '2025-01-15',
-      team: 'Samurai',
-      coach: 'Coach Sarah',
-      createdBy: '2',
-      createdAt: '2024-01-10T10:00:00Z'
-    },
-    {
-      id: '2',
-      date: '2025-01-20',
-      team: 'Samurai',
-      coach: 'Coach Mike',
-      createdBy: '2',
-      createdAt: '2024-01-12T10:00:00Z'
-    },
-    {
-      id: '3',
-      date: '2025-01-18',
-      team: 'Gladiator',
-      coach: 'Coach Alex',
-      createdBy: '3',
-      createdAt: '2024-01-11T10:00:00Z'
-    },
-    {
-      id: '4',
-      date: '2025-02-05',
-      team: 'Samurai',
-      coach: 'Coach Sarah',
-      createdBy: '2',
-      createdAt: '2024-01-15T10:00:00Z'
-    },
-    {
-      id: '5',
-      date: '2025-02-12',
-      team: 'Gladiator',
-      coach: 'Coach Alex',
-      createdBy: '3',
-      createdAt: '2024-01-18T10:00:00Z'
-    },
-    {
-      id: '6',
-      date: '2025-02-20',
-      team: 'Viking',
-      coach: 'Coach Erik',
-      createdBy: '4',
-      createdAt: '2024-01-20T10:00:00Z'
-    },
-    {
-      id: '7',
-      date: '2025-03-01',
-      team: 'Samurai',
-      coach: 'Coach Mike',
-      createdBy: '2',
-      createdAt: '2024-01-25T10:00:00Z'
-    },
-    {
-      id: '8',
-      date: '2025-03-08',
-      team: 'Gladiator',
-      coach: 'Coach Alex',
-      createdBy: '3',
-      createdAt: '2024-01-28T10:00:00Z'
-    },
-    {
-      id: '9',
-      date: '2025-03-15',
-      team: 'Viking',
-      coach: 'Coach Erik',
-      createdBy: '4',
-      createdAt: '2024-02-01T10:00:00Z'
-    },
-    {
-      id: '10',
-      date: '2025-04-05',
-      team: 'Samurai',
-      coach: 'Coach Sarah',
-      createdBy: '2',
-      createdAt: '2024-02-05T10:00:00Z'
-    },
-    {
-      id: '11',
-      date: '2024-12-10',
-      team: 'Samurai',
-      coach: 'Coach Sarah',
-      createdBy: '2',
-      createdAt: '2024-11-01T10:00:00Z'
-    },
-    {
-      id: '12',
-      date: '2024-11-25',
-      team: 'Gladiator',
-      coach: 'Coach Alex',
-      createdBy: '3',
-      createdAt: '2024-10-15T10:00:00Z'
-    },
-    {
-      id: '13',
-      date: '2024-12-05',
-      team: 'Viking',
-      coach: 'Coach Erik',
-      createdBy: '4',
-      createdAt: '2024-11-20T10:00:00Z'
-    },
-    {
-      id: '14',
-      date: '2025-05-10',
-      team: 'Samurai',
-      coach: 'Coach Sarah',
-      createdBy: '2',
-      createdAt: '2024-12-01T10:00:00Z'
-    },
-    {
-      id: '15',
-      date: '2025-05-15',
-      team: 'Gladiator',
-      coach: 'Coach Alex',
-      createdBy: '3',
-      createdAt: '2024-12-05T10:00:00Z'
-    },
-    {
-      id: '16',
-      date: '2025-05-22',
-      team: 'Viking',
-      coach: 'Coach Erik',
-      createdBy: '4',
-      createdAt: '2024-12-10T10:00:00Z'
-    },
-    {
-      id: '17',
-      date: '2025-06-03',
-      team: 'Samurai',
-      coach: 'Coach Mike',
-      createdBy: '2',
-      createdAt: '2024-12-15T10:00:00Z'
-    },
-    {
-      id: '18',
-      date: '2025-06-10',
-      team: 'Gladiator',
-      coach: 'Coach Alex',
-      createdBy: '3',
-      createdAt: '2024-12-20T10:00:00Z'
-    },
-    {
-      id: '19',
-      date: '2025-06-17',
-      team: 'Viking',
-      coach: 'Coach Erik',
-      createdBy: '4',
-      createdAt: '2024-12-25T10:00:00Z'
-    },
-    {
-      id: '20',
-      date: '2025-07-01',
-      team: 'Samurai',
-      coach: 'Coach Sarah',
-      createdBy: '2',
-      createdAt: '2024-12-30T10:00:00Z'
-    }
-  ]
-
-  const mockAttendance: AttendanceStatus[] = [
-    {
-      userId: '5',
-      sessionId: '1',
-      status: 'present',
-      updatedAt: '2024-01-14T15:30:00Z'
-    },
-    {
-      userId: '5',
-      sessionId: '2',
-      status: 'undecided',
-      updatedAt: '2024-01-13T09:15:00Z'
-    },
-    {
-      userId: '6',
-      sessionId: '1',
-      status: 'present',
-      updatedAt: '2024-01-14T16:00:00Z'
-    },
-    {
-      userId: '6',
-      sessionId: '2',
-      status: 'absent',
-      updatedAt: '2024-01-19T10:30:00Z'
-    },
-    {
-      userId: '7',
-      sessionId: '3',
-      status: 'present',
-      updatedAt: '2024-01-17T14:20:00Z'
-    },
-    {
-      userId: '7',
-      sessionId: '5',
-      status: 'undecided',
-      updatedAt: '2024-01-22T11:45:00Z'
-    },
-    {
-      userId: '8',
-      sessionId: '6',
-      status: 'present',
-      updatedAt: '2024-01-25T13:15:00Z'
-    },
-    {
-      userId: '8',
-      sessionId: '9',
-      status: 'undecided',
-      updatedAt: '2024-02-03T09:30:00Z'
-    },
-    {
-      userId: '5',
-      sessionId: '4',
-      status: 'present',
-      updatedAt: '2024-02-04T15:00:00Z'
-    },
-    {
-      userId: '5',
-      sessionId: '7',
-      status: 'undecided',
-      updatedAt: '2024-02-28T12:00:00Z'
-    },
-    {
-      userId: '5',
-      sessionId: '10',
-      status: 'absent',
-      updatedAt: '2024-03-30T10:00:00Z'
-    },
-    {
-      userId: '5',
-      sessionId: '11',
-      status: 'present',
-      updatedAt: '2024-12-09T15:30:00Z'
-    },
-    {
-      userId: '6',
-      sessionId: '11',
-      status: 'present',
-      updatedAt: '2024-12-09T16:00:00Z'
-    },
-    {
-      userId: '7',
-      sessionId: '12',
-      status: 'absent',
-      updatedAt: '2024-11-24T14:20:00Z'
-    },
-    {
-      userId: '8',
-      sessionId: '13',
-      status: 'present',
-      updatedAt: '2024-12-04T13:15:00Z'
-    },
-    {
-      userId: '5',
-      sessionId: '14',
-      status: 'undecided',
-      updatedAt: '2024-12-02T10:00:00Z'
-    },
-    {
-      userId: '6',
-      sessionId: '14',
-      status: 'present',
-      updatedAt: '2024-12-02T11:00:00Z'
-    },
-    {
-      userId: '7',
-      sessionId: '15',
-      status: 'present',
-      updatedAt: '2024-12-06T14:20:00Z'
-    },
-    {
-      userId: '8',
-      sessionId: '16',
-      status: 'undecided',
-      updatedAt: '2024-12-11T13:15:00Z'
-    },
-    {
-      userId: '5',
-      sessionId: '17',
-      status: 'present',
-      updatedAt: '2024-12-16T15:30:00Z'
-    },
-    {
-      userId: '6',
-      sessionId: '17',
-      status: 'present',
-      updatedAt: '2024-12-16T16:00:00Z'
-    },
-    {
-      userId: '7',
-      sessionId: '18',
-      status: 'undecided',
-      updatedAt: '2024-12-21T14:20:00Z'
-    },
-    {
-      userId: '8',
-      sessionId: '19',
-      status: 'present',
-      updatedAt: '2024-12-26T13:15:00Z'
-    },
-    {
-      userId: '5',
-      sessionId: '20',
-      status: 'undecided',
-      updatedAt: '2024-12-31T15:30:00Z'
-    },
-    {
-      userId: '6',
-      sessionId: '20',
-      status: 'present',
-      updatedAt: '2024-12-31T16:00:00Z'
-    }
-  ]
-
-  // Initialize with mock data
-  coachingSessions.value = mockSessions
-  attendanceRecords.value = mockAttendance
-
   // Computed properties
   const sessionsByTeam = computed(() => (team: 'Samurai' | 'Gladiator' | 'Viking') => {
     return coachingSessions.value.filter(session => session.team === team)
   })
 
   const attendanceBySession = computed(() => (sessionId: string) => {
-    return attendanceRecords.value.filter(record => record.sessionId === sessionId)
+    return attendanceRecords.value.filter(record => record.session_id === sessionId)
   })
 
   const getAttendanceForUser = computed(() => (userId: string, sessionId: string) => {
     const record = attendanceRecords.value.find(
-      r => r.userId === userId && r.sessionId === sessionId
+      r => r.user_id === userId && r.session_id === sessionId
     )
     return record?.status || 'absent'
   })
 
   // Actions
-  const createCoachingSession = async (date: string, team: 'Samurai' | 'Gladiator' | 'Viking', coach: string, createdBy: string) => {
-    const newSession: CoachingSession = {
-      id: Date.now().toString(),
-      date,
-      team,
-      coach,
-      createdBy,
-      createdAt: new Date().toISOString()
-    }
+  const fetchCoachingSessions = async (team?: 'Samurai' | 'Gladiator' | 'Viking') => {
+    try {
+      let query = supabase
+        .from('coaching_sessions')
+        .select('*')
+        .order('date', { ascending: false })
 
-    coachingSessions.value.push(newSession)
-    return { success: true, session: newSession }
+      if (team) {
+        query = query.eq('team', team)
+      }
+
+      const { data, error } = await query
+
+      if (error) {
+        console.error('Error fetching coaching sessions:', error)
+        return { success: false, error: error.message }
+      }
+
+      coachingSessions.value = data || []
+      return { success: true, sessions: data || [] }
+    } catch (error) {
+      console.error('Error fetching coaching sessions:', error)
+      return { success: false, error: 'Failed to fetch coaching sessions' }
+    }
+  }
+
+  const fetchAttendanceRecords = async (sessionId?: string) => {
+    try {
+      let query = supabase
+        .from('attendance_records')
+        .select('*')
+
+      if (sessionId) {
+        query = query.eq('session_id', sessionId)
+      }
+
+      const { data, error } = await query
+
+      if (error) {
+        console.error('Error fetching attendance records:', error)
+        return { success: false, error: error.message }
+      }
+
+      attendanceRecords.value = data || []
+      return { success: true, records: data || [] }
+    } catch (error) {
+      console.error('Error fetching attendance records:', error)
+      return { success: false, error: 'Failed to fetch attendance records' }
+    }
+  }
+
+  const createCoachingSession = async (date: string, team: 'Samurai' | 'Gladiator' | 'Viking', coach: string, createdBy: string) => {
+    try {
+      const newSession = {
+        date,
+        team,
+        coach,
+        created_by: createdBy
+      }
+
+      const { data, error } = await supabase
+        .from('coaching_sessions')
+        .insert(newSession)
+        .select()
+        .single()
+
+      if (error) {
+        return { success: false, error: error.message }
+      }
+
+      if (data) {
+        coachingSessions.value.unshift(data)
+        return { success: true, session: data }
+      }
+
+      return { success: false, error: 'Failed to create session' }
+    } catch (error) {
+      return { success: false, error: 'Failed to create session' }
+    }
   }
 
   const updateAttendance = async (userId: string, sessionId: string, status: 'absent' | 'present' | 'undecided') => {
-    const existingRecord = attendanceRecords.value.find(
-      r => r.userId === userId && r.sessionId === sessionId
-    )
+    try {
+      const existingRecord = attendanceRecords.value.find(
+        r => r.user_id === userId && r.session_id === sessionId
+      )
 
-    if (existingRecord) {
-      existingRecord.status = status
-      existingRecord.updatedAt = new Date().toISOString()
-    } else {
-      const newRecord: AttendanceStatus = {
-        userId,
-        sessionId,
-        status,
-        updatedAt: new Date().toISOString()
+      if (existingRecord) {
+        // Update existing record
+        const { data, error } = await supabase
+          .from('attendance_records')
+          .update({ status, updated_at: new Date().toISOString() })
+          .eq('id', existingRecord.id)
+          .select()
+          .single()
+
+        if (error) {
+          return { success: false, error: error.message }
+        }
+
+        if (data) {
+          const index = attendanceRecords.value.findIndex(r => r.id === existingRecord.id)
+          if (index !== -1) {
+            attendanceRecords.value[index] = data
+          }
+          return { success: true }
+        }
+      } else {
+        // Create new record
+        const newRecord = {
+          user_id: userId,
+          session_id: sessionId,
+          status
+        }
+
+        const { data, error } = await supabase
+          .from('attendance_records')
+          .insert(newRecord)
+          .select()
+          .single()
+
+        if (error) {
+          return { success: false, error: error.message }
+        }
+
+        if (data) {
+          attendanceRecords.value.push(data)
+          return { success: true }
+        }
       }
-      attendanceRecords.value.push(newRecord)
-    }
 
-    return { success: true }
+      return { success: false, error: 'Failed to update attendance' }
+    } catch (error) {
+      return { success: false, error: 'Failed to update attendance' }
+    }
   }
 
   const deleteCoachingSession = async (sessionId: string) => {
-    const index = coachingSessions.value.findIndex(s => s.id === sessionId)
-    if (index !== -1) {
-      coachingSessions.value.splice(index, 1)
-      // Also remove attendance records for this session
-      attendanceRecords.value = attendanceRecords.value.filter(r => r.sessionId !== sessionId)
+    try {
+      const { error } = await supabase
+        .from('coaching_sessions')
+        .delete()
+        .eq('id', sessionId)
+
+      if (error) {
+        return { success: false, error: error.message }
+      }
+
+      // Remove from local state
+      coachingSessions.value = coachingSessions.value.filter(s => s.id !== sessionId)
+      attendanceRecords.value = attendanceRecords.value.filter(r => r.session_id !== sessionId)
+
       return { success: true }
+    } catch (error) {
+      return { success: false, error: 'Failed to delete session' }
     }
-    return { success: false, error: 'Session not found' }
   }
 
-  const getAttendanceMatrix = computed(() => (team: 'Samurai' | 'Gladiator' | 'Viking') => {
-    const teamSessions = sessionsByTeam.value(team)
-    const teamMembers = [
-      { id: '5', name: 'Samurai Member', team: 'Samurai' },
-      { id: '6', name: 'Samurai Member 2', team: 'Samurai' },
-      { id: '7', name: 'Gladiator Member', team: 'Gladiator' },
-      { id: '8', name: 'Viking Member', team: 'Viking' }
-    ].filter(member => member.team === team)
+  const getAttendanceMatrix = computed(() => async (team: 'Samurai' | 'Gladiator' | 'Viking') => {
+    try {
+      // Fetch team members
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('id, name, team')
+        .eq('team', team)
 
-    return teamMembers.map(member => {
-      const sessions = teamSessions.map(session => ({
-        sessionId: session.id,
-        date: session.date,
-        status: getAttendanceForUser.value(member.id, session.id)
-      }))
-
-      return {
-        userId: member.id,
-        userName: member.name,
-        team: member.team,
-        sessions
+      if (usersError) {
+        return { success: false, error: usersError.message, matrix: [] }
       }
-    })
+
+      // Fetch team sessions
+      const { data: sessions, error: sessionsError } = await supabase
+        .from('coaching_sessions')
+        .select('*')
+        .eq('team', team)
+        .order('date')
+
+      if (sessionsError) {
+        return { success: false, error: sessionsError.message, matrix: [] }
+      }
+
+      // Fetch attendance records for this team
+      const { data: attendance, error: attendanceError } = await supabase
+        .from('attendance_records')
+        .select('*')
+        .in('session_id', sessions.map(s => s.id))
+
+      if (attendanceError) {
+        return { success: false, error: attendanceError.message, matrix: [] }
+      }
+
+      // Build matrix
+      const matrix = users.map(user => {
+        const userSessions = sessions.map(session => {
+          const record = attendance.find(a => a.user_id === user.id && a.session_id === session.id)
+          return {
+            sessionId: session.id,
+            date: session.date,
+            status: record?.status || 'absent'
+          }
+        })
+
+        return {
+          userId: user.id,
+          userName: user.name,
+          team: user.team,
+          sessions: userSessions
+        }
+      })
+
+      return { success: true, matrix }
+    } catch (error) {
+      return { success: false, error: 'Failed to build attendance matrix', matrix: [] }
+    }
   })
+
+  // Initialize store
+  const initializeStore = async () => {
+    await fetchCoachingSessions()
+    await fetchAttendanceRecords()
+  }
 
   return {
     // State
@@ -450,8 +269,11 @@ export const useCoachingStore = defineStore('coaching', () => {
     getAttendanceMatrix,
     
     // Actions
+    fetchCoachingSessions,
+    fetchAttendanceRecords,
     createCoachingSession,
     updateAttendance,
-    deleteCoachingSession
+    deleteCoachingSession,
+    initializeStore
   }
 }) 
