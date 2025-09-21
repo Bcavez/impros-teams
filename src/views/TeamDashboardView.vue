@@ -73,6 +73,42 @@
         </div>
       </div>
 
+      <!-- Next Coaching Attendance Matrix -->
+      <div v-if="nextCoachingSession" class="attendance-matrix-section">
+        <div class="section-header">
+          <h2>Next Coaching Session Attendance ({{ attendanceCount }})</h2>
+          <p class="session-info">
+            {{ formatDate(nextCoachingSession.date) }} - {{ nextCoachingSession.coach }}
+          </p>
+        </div>
+        
+        <div class="attendance-matrix">
+          <div class="matrix-container">
+            <table class="attendance-table">
+              <thead>
+                <tr>
+                  <th>Team Member</th>
+                  <th>Attendance Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="member in attendanceMatrixForNextSession" :key="member.userId">
+                  <td class="member-name">{{ member.userName }}</td>
+                  <td 
+                    :class="[
+                      'attendance-cell',
+                      `status-${member.status}`
+                    ]"
+                  >
+                    {{ getStatusLabel(member.status) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <!-- Status Modal -->
       <div v-if="showStatusModal" class="modal-overlay" @click="closeStatusModal">
         <div class="modal-content" @click.stop>
@@ -144,7 +180,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useCoachingStore } from '@/stores/coaching'
@@ -215,6 +251,45 @@ const displayedShows = computed(() => {
 // Displayed coaching (4 upcoming by default, all if showAllCoaching is true)
 const displayedCoaching = computed(() => {
   return showAllCoaching.value ? allCoaching.value : upcomingCoaching.value.slice(0, 4)
+})
+
+// Get the next coaching session (first upcoming session)
+const nextCoachingSession = computed(() => {
+  return upcomingCoaching.value[0] || null
+})
+
+// Get attendance matrix for the next coaching session
+const attendanceMatrixForNextSession = ref<any[]>([])
+
+const updateAttendanceMatrix = async () => {
+  if (!nextCoachingSession.value) {
+    attendanceMatrixForNextSession.value = []
+    return
+  }
+  
+  // Get all team members using the user store method
+  const teamMembersResult = await userStore.getUsersByTeam(userStore.currentTeam || 'Samurai')
+  
+  if (!teamMembersResult.success) {
+    attendanceMatrixForNextSession.value = []
+    return
+  }
+  
+  attendanceMatrixForNextSession.value = teamMembersResult.users.map(member => {
+    const attendanceStatus = coachingStore.getAttendanceForUser(member.id, nextCoachingSession.value.id)
+    return {
+      userId: member.id,
+      userName: member.name,
+      status: attendanceStatus
+    }
+  })
+}
+
+// Computed property for attendance count
+const attendanceCount = computed(() => {
+  const total = attendanceMatrixForNextSession.value.length
+  const present = attendanceMatrixForNextSession.value.filter(member => member.status === 'present').length
+  return `${present}/${total}`
 })
 
 // Toggle functions
@@ -396,10 +471,18 @@ onMounted(async () => {
     
     // Load team members separately to avoid blocking the main data
     await loadTeamMembers()
+    
+    // Update attendance matrix for next coaching session
+    await updateAttendanceMatrix()
   } catch (error) {
     console.error('Error loading dashboard data:', error)
   }
 })
+
+// Watch for changes in the next coaching session and update the attendance matrix
+watch(nextCoachingSession, async () => {
+  await updateAttendanceMatrix()
+}, { immediate: false })
 </script>
 
 <style scoped>
@@ -632,6 +715,76 @@ onMounted(async () => {
 }
 
 .status-badge.status-undecided {
+  background: #fff3cd;
+  color: #856404;
+}
+
+/* Attendance Matrix Styles */
+.attendance-matrix-section {
+  margin-top: 30px;
+}
+
+.session-info {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+  font-weight: normal;
+}
+
+.attendance-matrix {
+  margin-top: 20px;
+}
+
+.matrix-container {
+  overflow-x: auto;
+}
+
+.attendance-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.attendance-table th {
+  background: #f8f9fa;
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #495057;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.attendance-table td {
+  padding: 12px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.member-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.attendance-cell {
+  text-align: center;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: 6px;
+}
+
+.status-present {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-absent {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.status-undecided {
   background: #fff3cd;
   color: #856404;
 }
