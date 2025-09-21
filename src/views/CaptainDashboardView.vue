@@ -32,8 +32,9 @@
               <thead>
                 <tr>
                   <th>Member</th>
-                  <th v-for="session in teamCoachingSessions" :key="session.id">
+                  <th v-for="session in teamCoachingSessions" :key="session.id" :class="{ 'past-session': isSessionInPast(session.date) }">
                     {{ formatDate(session.date) }}
+                    <span v-if="isSessionInPast(session.date)" class="past-indicator">(Past)</span>
                   </th>
                 </tr>
               </thead>
@@ -48,7 +49,8 @@
                     :key="session.sessionId"
                     :class="[
                       'attendance-cell',
-                      `status-${session.status}`
+                      `status-${session.status}`,
+                      { 'past-session': isSessionInPast(session.date) }
                     ]"
                     @click="openAttendanceModal(member.userId, session.sessionId, session.status, session.date, member.userName)"
                   >
@@ -74,6 +76,12 @@
               <p class="session-coach">{{ session.coach }}</p>
             </div>
             <div class="session-actions">
+              <button 
+                @click="openEditCoachModal(session)" 
+                class="edit-button"
+              >
+                Edit Coach
+              </button>
               <button @click="deleteCoachingSession(session.id)" class="delete-button">
                 Delete
               </button>
@@ -356,6 +364,37 @@
           </div>
         </div>
       </div>
+
+      <!-- Edit Coach Modal -->
+      <div v-if="showEditCoachModal" class="modal-overlay">
+        <div class="modal">
+          <div class="modal-header">
+            <h2>Edit Coach</h2>
+            <button @click="showEditCoachModal = false" class="close-button">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="edit-coach">Coach Name:</label>
+              <input
+                id="edit-coach"
+                v-model="editingCoach"
+                type="text"
+                placeholder="Enter coach name"
+                class="form-input"
+                @keyup.enter="updateCoachingSessionCoach"
+              />
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" @click="showEditCoachModal = false" class="cancel-button">
+              Cancel
+            </button>
+            <button type="button" @click="updateCoachingSessionCoach" class="primary-button">
+              Update Coach
+            </button>
+          </div>
+        </div>
+      </div>
   </div>
 </template>
 
@@ -384,6 +423,11 @@ const showAssignMembersModal = ref(false)
 const showStatusModal = ref(false)
 const selectedEvent = ref<any>(null)
 const selectedAttendanceStatus = ref<'present' | 'absent' | 'undecided'>('present')
+
+// Coaching session editing
+const editingSessionId = ref<string | null>(null)
+const editingCoach = ref('')
+const showEditCoachModal = ref(false)
 
 // Form data
 const newCoachingDate = ref('')
@@ -418,6 +462,13 @@ const allTeamShowDates = computed(() => {
     return show && show.team === userStore.currentTeam
   })
 })
+
+const isSessionInPast = (sessionDate: string) => {
+  const session = new Date(sessionDate)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return session < today // Only sessions before today are considered "past"
+}
 
 const attendanceMatrix = ref<any[]>([])
 const availabilityMatrix = ref<any[]>([])
@@ -638,7 +689,31 @@ const updateShowDate = async () => {
 
 const deleteCoachingSession = async (sessionId: string) => {
   if (confirm('Are you sure you want to delete this coaching session?')) {
-    await coachingStore.deleteCoachingSession(sessionId)
+    const result = await coachingStore.deleteCoachingSession(sessionId)
+    
+    if (!result.success) {
+      alert('Failed to delete coaching session: ' + result.error)
+    }
+  }
+}
+
+const openEditCoachModal = (session: any) => {
+  editingSessionId.value = session.id
+  editingCoach.value = session.coach
+  showEditCoachModal.value = true
+}
+
+const updateCoachingSessionCoach = async () => {
+  if (!editingSessionId.value || !editingCoach.value.trim()) return
+  
+  const result = await coachingStore.updateCoachingSession(editingSessionId.value, editingCoach.value.trim())
+  
+  if (result.success) {
+    editingSessionId.value = null
+    editingCoach.value = ''
+    showEditCoachModal.value = false
+  } else {
+    alert('Failed to update coach: ' + result.error)
   }
 }
 
@@ -683,11 +758,17 @@ const closeStatusModal = () => {
 const confirmAttendanceUpdate = async () => {
   if (!selectedEvent.value) return
 
-  await coachingStore.updateAttendance(
+  const result = await coachingStore.updateAttendance(
     selectedEvent.value.userId,
     selectedEvent.value.sessionId,
-    selectedAttendanceStatus.value
+    selectedAttendanceStatus.value,
+    userStore.user?.role
   )
+  
+  if (!result.success) {
+    alert(result.error)
+    return
+  }
 
   // Force refresh attendance records and matrix data
   await coachingStore.fetchAttendanceRecords(undefined, true)
@@ -702,7 +783,11 @@ const formatModalDate = (dateStr: string) => {
 
 const toggleAttendance = async (userId: string, sessionId: string, currentStatus: string) => {
   const nextStatus = getNextStatus(currentStatus)
-  await coachingStore.updateAttendance(userId, sessionId, nextStatus)
+  const result = await coachingStore.updateAttendance(userId, sessionId, nextStatus, userStore.user?.role)
+  
+  if (!result.success) {
+    alert(result.error)
+  }
 }
 
 const toggleShowAvailability = async (userId: string, showDateId: string, currentStatus: string) => {
@@ -922,6 +1007,21 @@ onMounted(async () => {
   background: #c82333;
 }
 
+.edit-button {
+  background: #ffc107;
+  color: #212529;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.3s ease;
+}
+
+.edit-button:hover {
+  background: #e0a800;
+}
+
 .coaching-sessions, .shows-list {
   display: grid;
   gap: 15px;
@@ -1034,6 +1134,17 @@ onMounted(async () => {
 .status-undecided {
   background: #fff3cd;
   color: #856404;
+}
+
+.past-session {
+  opacity: 0.7;
+  /* Keep the original status colors, just reduce opacity */
+}
+
+.past-indicator {
+  font-size: 10px;
+  font-weight: normal;
+  color: #6c757d;
 }
 
 .show-dates {
@@ -1255,10 +1366,37 @@ onMounted(async () => {
   border-bottom: 1px solid #e9ecef;
 }
 
+.modal-header h2 {
+  margin: 0;
+  color: #333;
+  font-size: 18px;
+}
+
 .modal-header h3 {
   margin: 0;
   color: #333;
   font-size: 18px;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.3s ease;
+}
+
+.close-button:hover {
+  background: #f8f9fa;
+  color: #333;
 }
 
 .modal-close {

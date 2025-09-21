@@ -143,6 +143,38 @@ export const useCoachingStore = defineStore('coaching', () => {
 
       if (data) {
         coachingSessions.value.unshift(data)
+        
+        // Create default "undecided" attendance records for all team members
+        try {
+          // Get all team members
+          const { useUserStore } = await import('./user')
+          const userStore = useUserStore()
+          const teamMembersResult = await userStore.getUsersByTeam(team)
+          
+          if (teamMembersResult.success && teamMembersResult.users) {
+            // Create attendance records for each team member
+            const newAttendanceRecords = teamMembersResult.users.map(member => ({
+              user_id: member.id,
+              session_id: data.id,
+              status: 'present'
+            }))
+
+            // Insert all attendance records
+            const { data: attendanceData, error: attendanceError } = await supabase
+              .from('attendance_records')
+              .insert(newAttendanceRecords)
+              .select()
+
+            if (!attendanceError && attendanceData) {
+              // Add to local state
+              attendanceRecords.value.push(...attendanceData)
+            }
+          }
+        } catch (attendanceError) {
+          console.error('Failed to create default attendance records:', attendanceError)
+          // Don't fail the whole operation if attendance records fail
+        }
+        
         return { success: true, session: data }
       }
 
@@ -152,8 +184,21 @@ export const useCoachingStore = defineStore('coaching', () => {
     }
   }
 
-  const updateAttendance = async (userId: string, sessionId: string, status: 'absent' | 'present' | 'undecided') => {
+  const updateAttendance = async (userId: string, sessionId: string, status: 'absent' | 'present' | 'undecided', currentUserRole?: string) => {
     try {
+      // Check if the session is in the past and user is not a captain/admin
+      const session = coachingSessions.value.find(s => s.id === sessionId)
+      if (session) {
+        const sessionDate = new Date(session.date)
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        
+        // If session is before today (yesterday or earlier) and user is not captain/admin, deny update
+        if (sessionDate < today && currentUserRole && !['captain', 'admin'].includes(currentUserRole)) {
+          return { success: false, error: 'Only captains can update attendance for past coaching sessions' }
+        }
+      }
+
       const existingRecord = attendanceRecords.value.find(
         r => r.user_id === userId && r.session_id === sessionId
       )
@@ -208,14 +253,46 @@ export const useCoachingStore = defineStore('coaching', () => {
     }
   }
 
+  const updateCoachingSession = async (sessionId: string, coach: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('coaching_sessions')
+        .update({ coach })
+        .eq('id', sessionId)
+        .select()
+
+      if (error) {
+        console.error('Update coaching session error:', error)
+        return { success: false, error: error.message }
+      }
+
+      if (data && data.length > 0) {
+        // Update local state
+        const updatedSession = data[0]
+        const index = coachingSessions.value.findIndex(s => s.id === sessionId)
+        if (index !== -1) {
+          coachingSessions.value[index] = updatedSession
+        }
+        return { success: true, session: updatedSession }
+      }
+
+      return { success: false, error: 'No coaching session found with that ID' }
+    } catch (error) {
+      console.error('Update coaching session error:', error)
+      return { success: false, error: 'Failed to update session' }
+    }
+  }
+
   const deleteCoachingSession = async (sessionId: string) => {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('coaching_sessions')
         .delete()
         .eq('id', sessionId)
+        .select()
 
       if (error) {
+        console.error('Delete coaching session error:', error)
         return { success: false, error: error.message }
       }
 
@@ -225,6 +302,7 @@ export const useCoachingStore = defineStore('coaching', () => {
 
       return { success: true }
     } catch (error) {
+      console.error('Delete coaching session error:', error)
       return { success: false, error: 'Failed to delete session' }
     }
   }
@@ -339,6 +417,7 @@ export const useCoachingStore = defineStore('coaching', () => {
     fetchCoachingSessions,
     fetchAttendanceRecords,
     createCoachingSession,
+    updateCoachingSession,
     updateAttendance,
     deleteCoachingSession,
     initializeStore,

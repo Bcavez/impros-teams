@@ -167,7 +167,7 @@ const selectedEvent = ref<any>(null)
 const selectedCoachingStatus = ref<'present' | 'absent' | 'undecided'>('present')
 const selectedShowStatus = ref<'present' | 'absent' | 'undecided'>('present')
 
-// Get upcoming shows (filter out past dates)
+// Get upcoming shows (include today and future dates)
 const upcomingShows = computed(() => {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -175,7 +175,7 @@ const upcomingShows = computed(() => {
   return showsStore.showDates
     .filter(showDate => {
       const show = showsStore.shows.find(s => s.id === showDate.show_id)
-      return show?.team === userStore.currentTeam && isAfter(parseISO(showDate.date), today)
+      return show?.team === userStore.currentTeam && !isBefore(parseISO(showDate.date), today)
     })
     .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
 })
@@ -190,13 +190,13 @@ const allShows = computed(() => {
     .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
 })
 
-// Get upcoming coaching sessions (filter out past dates)
+// Get upcoming coaching sessions (include today and future dates)
 const upcomingCoaching = computed(() => {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   
   return coachingStore.coachingSessions
-    .filter(session => session.team === userStore.currentTeam && isAfter(parseISO(session.date), today))
+    .filter(session => session.team === userStore.currentTeam && !isBefore(parseISO(session.date), today))
     .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
 })
 
@@ -354,11 +354,17 @@ const confirmStatusUpdate = async () => {
   }
 
   if (selectedEvent.value.type === 'coaching') {
-    await coachingStore.updateAttendance(
+    const result = await coachingStore.updateAttendance(
       userStore.user?.id || '',
       selectedEvent.value.sessionId,
-      selectedCoachingStatus.value
+      selectedCoachingStatus.value,
+      userStore.user?.role
     )
+    
+    if (!result.success) {
+      alert(result.error)
+      return
+    }
   } else if (selectedEvent.value.type === 'show') {
     await showsStore.updateAvailability(
       userStore.user?.id || '',

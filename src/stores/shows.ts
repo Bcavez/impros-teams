@@ -213,6 +213,42 @@ export const useShowsStore = defineStore('shows', () => {
 
     if (data) {
       showDates.value.push(data)
+      
+      // Create default "undecided" availability records for all team members
+      try {
+        // Get the show to determine the team
+        const show = shows.value.find(s => s.id === showId)
+        if (show) {
+          // Get all team members
+          const { useUserStore } = await import('./user')
+          const userStore = useUserStore()
+          const teamMembersResult = await userStore.getUsersByTeam(show.team)
+          
+          if (teamMembersResult.success && teamMembersResult.users) {
+            // Create availability records for each team member
+            const newAvailabilityRecords = teamMembersResult.users.map(member => ({
+              user_id: member.id,
+              show_date_id: data.id,
+              status: 'undecided'
+            }))
+
+            // Insert all availability records
+            const { data: availabilityData, error: availabilityError } = await supabase
+              .from('show_availability')
+              .insert(newAvailabilityRecords)
+              .select()
+
+            if (!availabilityError && availabilityData) {
+              // Add to local state
+              availabilityRecords.value.push(...availabilityData)
+            }
+          }
+        }
+      } catch (availabilityError) {
+        console.error('Failed to create default availability records:', availabilityError)
+        // Don't fail the whole operation if availability records fail
+      }
+      
       return { success: true, showDate: data }
     }
 
