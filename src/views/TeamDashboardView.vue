@@ -4,15 +4,15 @@
     
     <div class="dashboard-content">
       <div class="dashboard-header">
-        <h1>Team Dashboard</h1>
-        <p>Welcome to your team management dashboard</p>
+        <h1>Tableau de Bord d'Équipe</h1>
+        <p>Bienvenue sur votre tableau de bord de gestion d'équipe</p>
       </div>
       <!-- Shows Section -->
       <div class="shows-section">
         <div class="section-header">
-          <h2>Shows</h2>
+          <h2>Spectacles</h2>
           <button @click="toggleShowAll" class="toggle-button">
-            {{ showAllShows ? 'Show Less' : 'Show All' }}
+            {{ showAllShows ? 'Voir Moins' : 'Voir Tout' }}
           </button>
         </div>
         
@@ -27,11 +27,11 @@
                           <h3>{{ getShowName(showDate.show_id) }}</h3>
             <p class="show-date">{{ formatDate(showDate.date) }}</p>
             <p class="show-members">
-              <span class="members-label">Assigned: </span>
+              <span class="members-label">Assignés : </span>
               <span v-if="getAssignedMembers(showDate.id).length > 0">
                 {{ getMemberNames(getAssignedMembers(showDate.id)).join(', ') }}
               </span>
-              <span v-else class="no-members">No members assigned</span>
+              <span v-else class="no-members">Aucun membre assigné</span>
               <span class="member-count">({{ getAssignedMembers(showDate.id).length }}/5)</span>
             </p>
             </div>
@@ -47,9 +47,9 @@
       <!-- Coaching Section -->
       <div class="coaching-section">
         <div class="section-header">
-          <h2>Coaching Sessions</h2>
+          <h2>Sessions de Coaching</h2>
           <button @click="toggleCoachingAll" class="toggle-button">
-            {{ showAllCoaching ? 'Show Less' : 'Show More' }}
+            {{ showAllCoaching ? 'Voir Moins' : 'Voir Plus' }}
           </button>
         </div>
         
@@ -76,7 +76,7 @@
       <!-- Next Coaching Attendance Matrix -->
       <div v-if="nextCoachingSession" class="attendance-matrix-section">
         <div class="section-header">
-          <h2>Next Coaching Session Attendance ({{ attendanceCount }})</h2>
+          <h2>Présence - Prochaine Session de Coaching ({{ attendanceCount }})</h2>
           <p class="session-info">
             {{ formatDate(nextCoachingSession.date) }} - {{ nextCoachingSession.coach }}
           </p>
@@ -87,8 +87,8 @@
             <table class="attendance-table">
               <thead>
                 <tr>
-                  <th>Team Member</th>
-                  <th>Attendance Status</th>
+                  <th>Membre d'Équipe</th>
+                  <th>Statut de Présence</th>
                 </tr>
               </thead>
               <tbody>
@@ -113,7 +113,7 @@
       <div v-if="showStatusModal" class="modal-overlay" @click="closeStatusModal">
         <div class="modal-content" @click.stop>
           <div class="modal-header">
-            <h3>Update Availability</h3>
+            <h3>Mettre à Jour la Disponibilité</h3>
             <button @click="closeStatusModal" class="modal-close">&times;</button>
           </div>
           <div class="modal-body">
@@ -121,13 +121,13 @@
             <p class="modal-title">{{ selectedEvent?.title }}</p>
             
             <div v-if="selectedEvent?.type === 'coaching'" class="status-section">
-              <h4>Coaching Session</h4>
+              <h4>Session de Coaching</h4>
               <div class="status-buttons">
                 <button 
                   :class="['status-button', { active: selectedCoachingStatus === 'present' }]"
                   @click="selectedCoachingStatus = 'present'"
                 >
-                  Present
+                  Présent
                 </button>
                 <button 
                   :class="['status-button', { active: selectedCoachingStatus === 'absent' }]"
@@ -139,38 +139,38 @@
                   :class="['status-button', { active: selectedCoachingStatus === 'undecided' }]"
                   @click="selectedCoachingStatus = 'undecided'"
                 >
-                  Undecided
+                  Indécis
                 </button>
               </div>
             </div>
             
             <div v-if="selectedEvent?.type === 'show'" class="status-section">
-              <h4>Show</h4>
+              <h4>Spectacle</h4>
               <div class="status-buttons">
                 <button 
                   :class="['status-button', { active: selectedShowStatus === 'present' }]"
                   @click="selectedShowStatus = 'present'"
                 >
-                  Present
+                  Disponible
                 </button>
                 <button 
                   :class="['status-button', { active: selectedShowStatus === 'absent' }]"
                   @click="selectedShowStatus = 'absent'"
                 >
-                  Absent
+                  Indisponible
                 </button>
                 <button 
                   :class="['status-button', { active: selectedShowStatus === 'undecided' }]"
                   @click="selectedShowStatus = 'undecided'"
                 >
-                  Undecided
+                  Indécis
                 </button>
               </div>
             </div>
             
             <div class="modal-actions">
-              <button @click="closeStatusModal" class="cancel-button">Cancel</button>
-              <button @click="confirmStatusUpdate" class="confirm-button">Confirm</button>
+              <button @click="closeStatusModal" class="cancel-button">Annuler</button>
+              <button @click="confirmStatusUpdate" class="confirm-button">Confirmer</button>
             </div>
           </div>
         </div>
@@ -377,16 +377,16 @@ const getCoachingStatus = (sessionId: string) => {
 
 const getStatusLabel = (status: string) => {
   switch (status) {
-    case 'present': return 'Present'
+    case 'present': return 'Présent'
     case 'absent': return 'Absent'
-    case 'undecided': return 'Undecided'
+    case 'undecided': return 'Indécis'
     default: return 'Absent'
   }
 }
 
 // Modal functions
 const openShowModal = (showDate: any) => {
-  const show = showsStore.shows.find(s => s.id === showDate.showId)
+  const show = showsStore.shows.find(s => s.id === showDate.show_id)
   selectedEvent.value = {
     type: 'show',
     date: showDate.date,
@@ -401,7 +401,7 @@ const openCoachingModal = (session: any) => {
   selectedEvent.value = {
     type: 'coaching',
     date: session.date,
-    title: `Coaching with ${session.coach}`,
+    title: session.coach,
     sessionId: session.id
   }
   selectedCoachingStatus.value = getCoachingStatus(session.id)

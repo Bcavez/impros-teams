@@ -1,49 +1,49 @@
 <template>
   <div class="login-container">
     <div class="login-card">
-      <h1 class="login-title">Team Management Dashboard</h1>
+      <h1 class="login-title">Tableau de Bord de Gestion d'Équipe</h1>
       
       <div class="auth-tabs">
         <button 
           :class="['tab-button', { active: activeTab === 'login' }]"
           @click="activeTab = 'login'"
         >
-          Login
+          Connexion
         </button>
         <button 
           :class="['tab-button', { active: activeTab === 'register' }]"
           @click="activeTab = 'register'"
         >
-          Register
+          Inscription
         </button>
       </div>
 
       <!-- Login Form -->
       <form v-if="activeTab === 'login'" @submit.prevent="handleLogin" class="auth-form">
         <div class="form-group">
-          <label for="login-name">Name</label>
+          <label for="login-name">Nom</label>
           <input
             id="login-name"
             v-model="loginForm.name"
             type="text"
             required
-            placeholder="Enter your name"
+            placeholder="Entrez votre nom"
           />
         </div>
         
         <div class="form-group">
-          <label for="login-password">Password</label>
+          <label for="login-password">Mot de passe</label>
           <input
             id="login-password"
             v-model="loginForm.password"
             type="password"
             required
-            placeholder="Enter your password"
+            placeholder="Entrez votre mot de passe"
           />
         </div>
 
         <button type="submit" class="submit-button" :disabled="isLoading">
-          {{ isLoading ? 'Logging in...' : 'Login' }}
+          {{ isLoading ? 'Connexion...' : 'Se connecter' }}
         </button>
 
         <div v-if="loginError" class="error-message">
@@ -54,13 +54,13 @@
       <!-- Register Form -->
       <form v-if="activeTab === 'register'" @submit.prevent="handleRegister" class="auth-form">
         <div class="form-group">
-          <label for="register-name">Name</label>
+          <label for="register-name">Nom</label>
           <input
             id="register-name"
             v-model="registerForm.name"
             type="text"
             required
-            placeholder="Enter your name"
+            placeholder="Entrez votre nom"
           />
         </div>
 
@@ -71,34 +71,45 @@
             v-model="registerForm.email"
             type="email"
             required
-            placeholder="Enter your email"
+            placeholder="Entrez votre email"
           />
         </div>
         
         <div class="form-group">
-          <label for="register-password">Password</label>
+          <label for="register-password">Mot de passe</label>
           <input
             id="register-password"
             v-model="registerForm.password"
             type="password"
             required
-            placeholder="Enter your password"
+            placeholder="Entrez votre mot de passe"
           />
         </div>
 
         <div class="form-group">
-          <label for="register-confirm-password">Confirm Password</label>
+          <label for="register-confirm-password">Confirmer le mot de passe</label>
           <input
             id="register-confirm-password"
             v-model="registerForm.confirmPassword"
             type="password"
             required
-            placeholder="Confirm your password"
+            placeholder="Confirmez votre mot de passe"
           />
         </div>
 
-        <button type="submit" class="submit-button" :disabled="isLoading">
-          {{ isLoading ? 'Registering...' : 'Register' }}
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              v-model="registerForm.acceptTerms"
+              required
+            />
+            <span class="checkbox-text">Je suis d'accord avec l'utilisation qui est faite de mes données personnelles. Voir ci-dessous pour plus de détails.</span>
+          </label>
+        </div>
+
+        <button type="submit" class="submit-button" :disabled="isLoading || !registerForm.acceptTerms">
+          {{ isLoading ? 'Inscription...' : 'S\'inscrire' }}
         </button>
 
         <div v-if="registerError" class="error-message">
@@ -106,6 +117,26 @@
         </div>
       </form>
 
+      <!-- GDPR Information -->
+      <div class="gdpr-info" v-if="activeTab === 'register'">
+        <h3>INFORMATION SUR LA PROTECTION DES DONNÉES PERSONNELLES</h3>
+        
+        <p>Conformément au Règlement Général sur la Protection des Données (RGPD), nous vous informons que les données personnelles collectées lors de votre inscription sont traitées dans le cadre de la gestion de votre compte utilisateur et de l'utilisation de notre plateforme de gestion d'équipe.</p>
+
+        <p><strong>Données collectées :</strong> Nom, adresse e-mail, mot de passe (haché), équipe d'appartenance, rôle dans l'équipe, présence aux entraînements, présence aux spectacles.</p>
+
+        <p><strong>Finalités du traitement :</strong> Gestion de votre compte, authentification, communication au sein de l'équipe, organisation des entraînements et événements.</p>
+
+        <p><strong>Base légale :</strong> Exécution du contrat d'utilisation de la plateforme (article 6.1.b du RGPD).</p>
+
+        <p><strong>Durée de conservation :</strong> Vos données sont conservées pendant toute la durée de votre compte utilisateur et supprimées dans un délai de 30 jours après la fermeture de votre compte. Vos données de présence aux entraînements et spectacles sont conservées pendant maximum 1 an et seront supprimées à la fin de la saison.</p>
+
+        <p><strong>Destinataires :</strong> Vos données sont accessibles uniquement aux membres autorisés de votre équipe et aux administrateurs de la plateforme.</p>
+
+        <p><strong>Vos droits :</strong> Vous disposez d'un droit d'accès, de rectification, de suppression, de limitation du traitement, de portabilité et d'opposition. Pour exercer ces droits, contactez-nous.</p>
+
+        <p><strong>Sécurité :</strong> Vos données sont protégées par des mesures techniques et organisationnelles appropriées, notamment le chiffrement des mots de passe.</p>
+      </div>
 
     </div>
   </div>
@@ -137,7 +168,8 @@ const registerForm = reactive({
   name: '',
   email: '',
   password: '',
-  confirmPassword: ''
+  confirmPassword: '',
+  acceptTerms: false
 })
 
 const handleLogin = async () => {
@@ -170,10 +202,10 @@ const handleLogin = async () => {
       
       router.push('/dashboard')
     } else {
-      loginError.value = result.error || 'Login failed'
+      loginError.value = result.error || 'Échec de la connexion'
     }
   } catch (error) {
-    loginError.value = 'An error occurred during login'
+    loginError.value = 'Une erreur s\'est produite lors de la connexion'
   } finally {
     isLoading.value = false
   }
@@ -181,7 +213,7 @@ const handleLogin = async () => {
 
 const handleRegister = async () => {
   if (registerForm.password !== registerForm.confirmPassword) {
-    registerError.value = 'Passwords do not match'
+    registerError.value = 'Les mots de passe ne correspondent pas'
     return
   }
 
@@ -218,10 +250,10 @@ const handleRegister = async () => {
       
       router.push('/dashboard')
     } else {
-      registerError.value = 'Registration failed'
+      registerError.value = 'Échec de l\'inscription'
     }
   } catch (error) {
-    registerError.value = 'An error occurred during registration'
+    registerError.value = 'Une erreur s\'est produite lors de l\'inscription'
   } finally {
     isLoading.value = false
   }
@@ -343,6 +375,31 @@ const handleRegister = async () => {
   cursor: not-allowed;
 }
 
+.checkbox-group {
+  margin: 15px 0;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.checkbox-label input[type="checkbox"] {
+  margin: 0;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.checkbox-text {
+  color: #333;
+}
+
 .error-message {
   color: #e74c3c;
   font-size: 14px;
@@ -351,6 +408,35 @@ const handleRegister = async () => {
   background: #fdf2f2;
   border-radius: 4px;
   border: 1px solid #fecaca;
+}
+
+.gdpr-info {
+  margin-top: 20px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+  font-size: 12px;
+  line-height: 1.4;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.gdpr-info h3 {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  color: #495057;
+  font-weight: 600;
+}
+
+.gdpr-info p {
+  margin: 8px 0;
+  color: #6c757d;
+}
+
+.gdpr-info strong {
+  color: #495057;
+  font-weight: 600;
 }
 
 

@@ -4,8 +4,8 @@
     
     <div class="dashboard-content">
       <div class="page-header">
-        <h1>Captain Dashboard</h1>
-        <p>Manage coaching sessions and shows for your team</p>
+        <h1>Tableau de Bord Capitaine</h1>
+        <p>Gérez les sessions de coaching et spectacles pour votre équipe</p>
       </div>
       
       <div class="navigation-tabs">
@@ -13,28 +13,28 @@
           :class="['tab-button', { active: activeTab === 'coaching' }]"
           @click="activeTab = 'coaching'"
         >
-          Coaching Management
+          Gestion Coaching
         </button>
         <button 
           :class="['tab-button', { active: activeTab === 'shows' }]"
           @click="activeTab = 'shows'"
         >
-          Show Management
+          Gestion Spectacles
         </button>
       </div>
 
       <!-- Coaching Management -->
       <div v-if="activeTab === 'coaching'" class="tab-content">
         <div class="attendance-matrix">
-          <h3>Attendance Matrix</h3>
+          <h3>Matrice de Présence</h3>
           <div class="matrix-container">
             <table class="attendance-table">
               <thead>
                 <tr>
-                  <th>Member</th>
+                  <th>Membre</th>
                   <th v-for="session in teamCoachingSessions" :key="session.id" :class="{ 'past-session': isSessionInPast(session.date) }">
                     {{ formatDate(session.date) }}
-                    <span v-if="isSessionInPast(session.date)" class="past-indicator">(Past)</span>
+                    <span v-if="isSessionInPast(session.date)" class="past-indicator">(Passé)</span>
                   </th>
                 </tr>
               </thead>
@@ -63,9 +63,9 @@
         </div>
 
         <div class="section-header">
-          <h2>Coaching Sessions</h2>
+          <h2>Sessions de Coaching</h2>
           <button @click="showCreateCoachingModal = true" class="primary-button">
-            Create Coaching Session
+            Créer Session de Coaching
           </button>
         </div>
 
@@ -80,10 +80,10 @@
                 @click="openEditCoachModal(session)" 
                 class="edit-button"
               >
-                Edit Coach
+                Modifier Coach
               </button>
               <button @click="deleteCoachingSession(session.id)" class="delete-button">
-                Delete
+                Supprimer
               </button>
             </div>
           </div>
@@ -93,12 +93,12 @@
       <!-- Show Management -->
       <div v-if="activeTab === 'shows'" class="tab-content">
         <div class="availability-matrix">
-          <h3>Availability Matrix</h3>
+          <h3>Matrice de Disponibilité</h3>
           <div class="matrix-container">
             <table class="attendance-table">
               <thead>
                 <tr>
-                  <th>Member</th>
+                  <th>Membre</th>
                   <th v-for="showDate in allTeamShowDates" :key="showDate.id">
                     {{ getShowName(showDate.show_id) }} - {{ formatDate(showDate.date) }}
                   </th>
@@ -125,9 +125,9 @@
         </div>
 
         <div class="section-header">
-          <h2>Shows</h2>
+          <h2>Spectacles</h2>
           <button @click="showCreateShowModal = true" class="primary-button">
-            Create Show
+            Créer Spectacle
           </button>
         </div>
 
@@ -137,7 +137,7 @@
               <h3>{{ show.name }}</h3>
               <div v-for="showDate in getShowDates(show.id)" :key="showDate.id" class="show-date-info">
                 <span class="date">{{ formatDate(showDate.date) }}</span>
-                <span class="members">{{ getAssignedMembers(showDate.id).length }}/5 members</span>
+                <span class="members">{{ getAssignedMembers(showDate.id).length }}/5 membres</span>
               </div>
             </div>
             <div class="show-actions">
@@ -146,20 +146,20 @@
                 @click="showCreateShowDateModal = true; selectedShow = show" 
                 class="secondary-button"
               >
-                Add Date
+                Ajouter Date
               </button>
               <button 
                 v-else 
                 @click="openUpdateShowDateModal(show)" 
                 class="secondary-button"
               >
-                Update Date
+                Modifier Date
               </button>
               <button @click="openAssignMembersModal(getShowDates(show.id)[0])" class="secondary-button">
-                Assign Members
+                Assigner Membres
               </button>
               <button @click="confirmDeleteShow(show.id)" class="delete-button">
-                Delete
+                Supprimer
               </button>
             </div>
           </div>
@@ -170,7 +170,7 @@
     <!-- Create Coaching Modal -->
     <div v-if="showCreateCoachingModal" class="modal-overlay" @click="showCreateCoachingModal = false">
       <div class="modal" @click.stop>
-        <h3>Create Coaching Session</h3>
+        <h3>Créer Session de Coaching</h3>
         <form @submit.prevent="createCoachingSession">
           <div class="form-group">
             <label for="coaching-date">Date</label>
@@ -188,15 +188,15 @@
               v-model="newCoachingCoach"
               type="text"
               required
-              placeholder="Enter coach name"
+              placeholder="Entrez le nom du coach"
             />
           </div>
           <div class="modal-actions">
             <button type="button" @click="showCreateCoachingModal = false" class="cancel-button">
-              Cancel
+              Annuler
             </button>
             <button type="submit" class="primary-button">
-              Create
+              Créer
             </button>
           </div>
         </form>
@@ -206,25 +206,25 @@
     <!-- Create Show Modal -->
     <div v-if="showCreateShowModal" class="modal-overlay" @click="showCreateShowModal = false">
       <div class="modal" @click.stop>
-        <h3>Create Show</h3>
+        <h3>Créer Spectacle</h3>
         <form @submit.prevent="createShow">
           <div class="form-group">
-            <label for="show-name">Show Name</label>
+            <label for="show-name">Nom du Spectacle</label>
             <input
               id="show-name"
               v-model="newShow.name"
               type="text"
               required
-              placeholder="Enter show name"
+              placeholder="Entrez le nom du spectacle"
             />
           </div>
 
           <div class="modal-actions">
             <button type="button" @click="showCreateShowModal = false" class="cancel-button">
-              Cancel
+              Annuler
             </button>
             <button type="submit" class="primary-button">
-              Create
+              Créer
             </button>
           </div>
         </form>
@@ -234,7 +234,7 @@
          <!-- Create Show Date Modal -->
      <div v-if="showCreateShowDateModal" class="modal-overlay" @click="showCreateShowDateModal = false">
        <div class="modal" @click.stop>
-         <h3>Add Show Date</h3>
+         <h3>Ajouter Date de Spectacle</h3>
          <form @submit.prevent="createShowDate">
            <div class="form-group">
              <label for="show-date">Date</label>
@@ -247,10 +247,10 @@
            </div>
            <div class="modal-actions">
              <button type="button" @click="showCreateShowDateModal = false" class="cancel-button">
-               Cancel
+               Annuler
              </button>
              <button type="submit" class="primary-button">
-               Create
+               Créer
              </button>
            </div>
          </form>
@@ -260,7 +260,7 @@
            <!-- Update Show Date Modal -->
       <div v-if="showUpdateShowDateModal" class="modal-overlay" @click="showUpdateShowDateModal = false">
         <div class="modal" @click.stop>
-          <h3>Update Show Date</h3>
+          <h3>Modifier Date de Spectacle</h3>
           <form @submit.prevent="updateShowDate">
             <div class="form-group">
               <label for="update-show-date">Date</label>
@@ -273,10 +273,10 @@
             </div>
             <div class="modal-actions">
               <button type="button" @click="showUpdateShowDateModal = false" class="cancel-button">
-                Cancel
+                Annuler
               </button>
               <button type="submit" class="primary-button">
-                Update
+                Mettre à Jour
               </button>
             </div>
           </form>
@@ -286,9 +286,9 @@
       <!-- Assign Members Modal -->
       <div v-if="showAssignMembersModal" class="modal-overlay" @click="showAssignMembersModal = false">
         <div class="modal" @click.stop>
-          <h3>Assign Members to Show</h3>
+          <h3>Assigner Membres au Spectacle</h3>
           <div class="form-group">
-            <label>Available Members</label>
+            <label>Membres Disponibles</label>
             <div class="members-list">
                              <div 
                  v-for="member in availableMembersForShow" 
@@ -304,19 +304,19 @@
                >
                 <span class="member-name">{{ member.name }}</span>
                 <span class="member-status">
-                  {{ selectedMembers.includes(member.id) ? 'Selected' : 
-                     member.availability === 'absent' ? 'Unavailable' : 
-                     member.availability === 'present' ? 'Available' : 'Undecided' }}
+                  {{ selectedMembers.includes(member.id) ? 'Sélectionné' : 
+                     member.availability === 'absent' ? 'Indisponible' : 
+                     member.availability === 'present' ? 'Disponible' : 'Indécis' }}
                 </span>
               </div>
             </div>
           </div>
           <div class="modal-actions">
             <button type="button" @click="showAssignMembersModal = false" class="cancel-button">
-              Cancel
+              Annuler
             </button>
             <button type="button" @click="saveMemberAssignments" class="primary-button">
-              Save Assignments
+              Sauvegarder Assignations
             </button>
           </div>
         </div>
@@ -326,7 +326,7 @@
       <div v-if="showStatusModal" class="modal-overlay" @click="closeStatusModal">
         <div class="modal-content" @click.stop>
           <div class="modal-header">
-            <h3>Update Attendance</h3>
+            <h3>Mettre à Jour la Présence</h3>
             <button @click="closeStatusModal" class="modal-close">&times;</button>
           </div>
           <div class="modal-body">
@@ -334,13 +334,13 @@
             <p class="modal-title">{{ selectedEvent?.title }}</p>
             
             <div class="status-section">
-              <h4>Coaching Session</h4>
+              <h4>Session de Coaching</h4>
               <div class="status-buttons">
                 <button 
                   :class="['status-button', { active: selectedAttendanceStatus === 'present' }]"
                   @click="selectedAttendanceStatus = 'present'"
                 >
-                  Present
+                  Présent
                 </button>
                 <button 
                   :class="['status-button', { active: selectedAttendanceStatus === 'absent' }]"
@@ -352,14 +352,14 @@
                   :class="['status-button', { active: selectedAttendanceStatus === 'undecided' }]"
                   @click="selectedAttendanceStatus = 'undecided'"
                 >
-                  Undecided
+                  Indécis
                 </button>
               </div>
             </div>
             
             <div class="modal-actions">
-              <button @click="closeStatusModal" class="cancel-button">Cancel</button>
-              <button @click="confirmAttendanceUpdate" class="confirm-button">Confirm</button>
+              <button @click="closeStatusModal" class="cancel-button">Annuler</button>
+              <button @click="confirmAttendanceUpdate" class="confirm-button">Confirmer</button>
             </div>
           </div>
         </div>
@@ -369,17 +369,17 @@
       <div v-if="showEditCoachModal" class="modal-overlay">
         <div class="modal">
           <div class="modal-header">
-            <h2>Edit Coach</h2>
+            <h2>Modifier Coach</h2>
             <button @click="showEditCoachModal = false" class="close-button">&times;</button>
           </div>
           <div class="modal-body">
             <div class="form-group">
-              <label for="edit-coach">Coach Name:</label>
+              <label for="edit-coach">Nom du Coach :</label>
               <input
                 id="edit-coach"
                 v-model="editingCoach"
                 type="text"
-                placeholder="Enter coach name"
+                placeholder="Entrez le nom du coach"
                 class="form-input"
                 @keyup.enter="updateCoachingSessionCoach"
               />
@@ -387,10 +387,10 @@
           </div>
           <div class="modal-actions">
             <button type="button" @click="showEditCoachModal = false" class="cancel-button">
-              Cancel
+              Annuler
             </button>
             <button type="button" @click="updateCoachingSessionCoach" class="primary-button">
-              Update Coach
+              Mettre à Jour Coach
             </button>
           </div>
         </div>
@@ -566,9 +566,9 @@ const formatDate = (dateStr: string) => {
 
 const getStatusLabel = (status: string) => {
   switch (status) {
-    case 'present': return 'Present'
+    case 'present': return 'Présent'
     case 'absent': return 'Absent'
-    case 'undecided': return 'Undecided'
+    case 'undecided': return 'Indécis'
     default: return 'Absent'
   }
 }
