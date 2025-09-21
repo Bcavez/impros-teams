@@ -15,7 +15,7 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}']
       },
-      includeAssets: ['favicon.ico', 'pwa-icon.svg', "impros-icon.gif"],
+      includeAssets: ['favicon.ico', "impros-icon.svg"],
       manifest: {
         name: 'Team Management Dashboard',
         short_name: 'Team Dashboard',
@@ -28,7 +28,7 @@ export default defineConfig({
         start_url: '/',
         icons: [
           {
-            src: 'impros-icon.gif',
+            src: 'impros-icon.svg',
             sizes: 'any',
             type: 'image/svg+xml',
             purpose: 'any'
