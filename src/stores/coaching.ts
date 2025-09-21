@@ -47,7 +47,7 @@ export const useCoachingStore = defineStore('coaching', () => {
     const record = attendanceRecords.value.find(
       r => r.user_id === userId && r.session_id === sessionId
     )
-    return record?.status || 'absent'
+    return record?.status || 'present'
   })
 
   // Actions
