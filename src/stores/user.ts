@@ -304,6 +304,59 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
+  const refreshCurrentUser = async () => {
+    if (!user.value?.id) {
+      return { success: false, error: 'No current user' }
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.value.id)
+        .single()
+
+      if (error) {
+        return { success: false, error: error.message }
+      }
+
+      // Check if team assignment changed
+      const previousTeam = user.value.team
+      const newTeam = data.team
+      
+      user.value = data
+      saveAuthState(data)
+
+      // If team assignment changed, clear relevant caches
+      if (previousTeam !== newTeam) {
+        // Clear coaching and shows cache to fetch new team's data
+        import('./coaching').then(({ useCoachingStore }) => {
+          const coachingStore = useCoachingStore()
+          coachingStore.clearCache()
+        })
+        
+        import('./shows').then(({ useShowsStore }) => {
+          const showsStore = useShowsStore()
+          showsStore.clearCache()
+        })
+
+        // Clear team members cache
+        const teamMembersCacheKey = `team_members_${newTeam}`
+        sessionStorage.removeItem(teamMembersCacheKey)
+        
+        // Clear any old team members cache if team changed
+        if (previousTeam) {
+          const oldTeamMembersCacheKey = `team_members_${previousTeam}`
+          sessionStorage.removeItem(oldTeamMembersCacheKey)
+        }
+      }
+
+      return { success: true, user: data }
+    } catch (error) {
+      return { success: false, error: 'Failed to refresh user data' }
+    }
+  }
+
 
 
   const updateUserRole = async (userId: string, role: 'admin' | 'captain' | 'member') => {
@@ -386,6 +439,7 @@ export const useUserStore = defineStore('user', () => {
     assignCaptainRole,
     getUsersByTeam,
     getAllUsers,
+    refreshCurrentUser,
     updateUserRole,
     deleteUser,
     

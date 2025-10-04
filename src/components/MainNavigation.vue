@@ -15,7 +15,6 @@
         
         <div class="nav-actions">
           <button 
-            v-if="userStore.isCaptain || userStore.isAdmin"
             @click="handleRefresh" 
             class="nav-button refresh-button"
             :disabled="isRefreshing"
@@ -131,6 +130,8 @@ const handleRefresh = async () => {
   try {
     // Refresh data based on user role
     if (userStore.isCaptain) {
+      // For captains, refresh current user data first (in case team changed), then coaching/shows data
+      await userStore.refreshCurrentUser()
       await Promise.all([
         coachingStore.refreshData(),
         showsStore.refreshData()
@@ -138,6 +139,10 @@ const handleRefresh = async () => {
     } else if (userStore.isAdmin) {
       // For admin, refresh user data
       await userStore.getAllUsers()
+    } else {
+      // For all other users (including normal members), refresh current user data
+      // This will clear caches if team assignment changed
+      await userStore.refreshCurrentUser()
     }
   } catch (error) {
     console.error('Error refreshing data:', error)

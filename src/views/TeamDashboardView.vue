@@ -11,7 +11,7 @@
       <div class="shows-section">
         <div class="section-header">
           <h2>Spectacles</h2>
-          <button @click="toggleShowAll" class="toggle-button">
+          <button @click="toggleShowAll" class="toggle-button desktop-toggle">
             {{ showAllShows ? 'Voir Moins' : 'Voir Tout' }}
           </button>
         </div>
@@ -42,13 +42,19 @@
             </div>
           </div>
         </div>
+        
+        <div class="mobile-toggle-container">
+          <button @click="toggleShowAll" class="toggle-button mobile-toggle">
+            {{ showAllShows ? 'Voir Moins' : 'Voir Tout' }}
+          </button>
+        </div>
       </div>
 
       <!-- Coaching Section -->
       <div class="coaching-section">
         <div class="section-header">
           <h2>Sessions de Coaching</h2>
-          <button @click="toggleCoachingAll" class="toggle-button">
+          <button @click="toggleCoachingAll" class="toggle-button desktop-toggle">
             {{ showAllCoaching ? 'Voir Moins' : 'Voir Plus' }}
           </button>
         </div>
@@ -70,6 +76,12 @@
               </span>
             </div>
           </div>
+        </div>
+        
+        <div class="mobile-toggle-container">
+          <button @click="toggleCoachingAll" class="toggle-button mobile-toggle">
+            {{ showAllCoaching ? 'Voir Moins' : 'Voir Plus' }}
+          </button>
         </div>
       </div>
 
@@ -935,10 +947,32 @@ watch(nextCoachingSession, async () => {
   background: #5a6fd8;
 }
 
+/* Mobile toggle container styles */
+.mobile-toggle-container {
+  display: none;
+  margin-top: 20px;
+  text-align: center;
+}
+
 /* Mobile responsive styles */
 @media (max-width: 768px) {
   .dashboard-content {
     padding: 20px 10px;
+  }
+  
+  /* Hide desktop toggle buttons on mobile */
+  .desktop-toggle {
+    display: none;
+  }
+  
+  /* Show mobile toggle buttons */
+  .mobile-toggle-container {
+    display: block;
+  }
+  
+  .mobile-toggle {
+    width: 100%;
+    max-width: 200px;
   }
 
   .header-content {
