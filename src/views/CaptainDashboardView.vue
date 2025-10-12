@@ -31,7 +31,7 @@
             <table class="attendance-table">
               <thead>
                 <tr>
-                  <th>Membre</th>
+                  <th class="sticky-column">Membre</th>
                   <th v-for="session in teamCoachingSessions" :key="session.id" :class="{ 'past-session': isSessionInPast(session.date) }">
                     {{ formatDate(session.date) }}
                     <span v-if="isSessionInPast(session.date)" class="past-indicator">(Passé)</span>
@@ -1074,15 +1074,18 @@ onMounted(async () => {
 
 .matrix-container {
   overflow-x: auto;
+  overflow-y: visible;
+  position: relative;
 }
 
 .attendance-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   background: white;
   border-radius: 8px;
-  overflow: hidden;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: relative;
 }
 
 .attendance-table th {
@@ -1094,14 +1097,31 @@ onMounted(async () => {
   border-bottom: 1px solid #e9ecef;
 }
 
+.attendance-table :deep(.sticky-column),
+.attendance-table th.sticky-column {
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 10 !important;
+  background: #f8f9fa !important;
+  border-right: 2px solid #dee2e6 !important;
+  min-width: 150px;
+}
+
 .attendance-table td {
   padding: 12px;
   border-bottom: 1px solid #e9ecef;
 }
 
-.member-name {
+.attendance-table :deep(.member-name),
+.attendance-table td.member-name {
   font-weight: 500;
   color: #333;
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 9 !important;
+  background: white !important;
+  border-right: 2px solid #dee2e6 !important;
+  min-width: 150px;
 }
 
 .attendance-summary {
