@@ -469,7 +469,7 @@ const getStatusLabel = (status: string) => {
     case 'present': return 'Present'
     case 'absent': return 'Absent'
     case 'undecided': return 'Undecided'
-    default: return 'Absent'
+    default: return 'Présent'
   }
 }
 

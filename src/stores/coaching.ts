@@ -355,7 +355,7 @@ export const useCoachingStore = defineStore('coaching', () => {
           return {
             sessionId: session.id,
             date: session.date,
-            status: record?.status || 'absent'
+            status: record?.status || 'present'
           }
         })
 
