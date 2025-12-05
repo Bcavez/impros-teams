@@ -30,20 +30,20 @@ export const useUserStore = defineStore('user', () => {
     try {
       const savedUser = localStorage.getItem('auth_user')
       const isAuth = localStorage.getItem('auth_authenticated')
-      
+
       if (savedUser && isAuth === 'true') {
         const userData = JSON.parse(savedUser)
         user.value = userData
         isAuthenticated.value = true
-        
+
         // Initialize stores after restoring authentication state
         console.log('🔄 Initializing stores after auth state restore...')
         const { useCoachingStore } = await import('./coaching')
         const { useShowsStore } = await import('./shows')
-        
+
         const coachingStore = useCoachingStore()
         const showsStore = useShowsStore()
-        
+
         await Promise.all([
           coachingStore.fetchCoachingSessions(undefined, true),
           coachingStore.fetchAttendanceRecords(undefined, true),
@@ -52,16 +52,16 @@ export const useUserStore = defineStore('user', () => {
           showsStore.fetchShowAssignments(true),
           showsStore.fetchShowAvailability(true)
         ])
-        
+
         // Cache team members for the user's team
         const teamMembersResult = await getUsersByTeam(userData.team || 'Samurai')
         if (teamMembersResult.success) {
           const teamMembersCacheKey = `team_members_${userData.team}`
           sessionStorage.setItem(teamMembersCacheKey, JSON.stringify(teamMembersResult.users))
         }
-        
+
         sessionStorage.setItem('stores_initialized', 'true')
-        
+
         return true
       }
       return false
@@ -93,7 +93,7 @@ export const useUserStore = defineStore('user', () => {
       const { data, error } = await supabase
         .from('users')
         .select('*')
-        .eq('name', name)
+        .eq('name', name.trim())
         .single()
 
       if (error || !data) {
@@ -102,7 +102,7 @@ export const useUserStore = defineStore('user', () => {
 
       // Check if user has a bcrypt hash or legacy plain text
       let isPasswordValid = false
-      
+
       if (isBcryptHash(data.password_hash)) {
         // User has bcrypt hash - compare with bcrypt
         isPasswordValid = await comparePassword(password, data.password_hash)
@@ -128,13 +128,13 @@ export const useUserStore = defineStore('user', () => {
     user.value = null
     isAuthenticated.value = false
     clearAuthState() // Clear persistent authentication state
-    
+
     // Clear all cache when user logs out
     import('./coaching').then(({ useCoachingStore }) => {
       const coachingStore = useCoachingStore()
       coachingStore.clearCache()
     })
-    
+
     import('./shows').then(({ useShowsStore }) => {
       const showsStore = useShowsStore()
       showsStore.clearCache()
@@ -145,9 +145,9 @@ export const useUserStore = defineStore('user', () => {
     try {
       // Hash the password with bcrypt
       const hashedPassword = await hashPassword(password)
-      
+
       const newUser = {
-        name,
+        name: name.trim(),
         email,
         password_hash: hashedPassword, // Store the hashed password
         role: 'member' as const,
@@ -236,8 +236,8 @@ export const useUserStore = defineStore('user', () => {
     try {
       const { data, error } = await supabase
         .from('users')
-        .update({ 
-          is_captain: isCaptain 
+        .update({
+          is_captain: isCaptain
         })
         .eq('id', userId)
         .select()
@@ -323,7 +323,7 @@ export const useUserStore = defineStore('user', () => {
       // Check if team assignment changed
       const previousTeam = user.value.team
       const newTeam = data.team
-      
+
       user.value = data
       saveAuthState(data)
 
@@ -334,7 +334,7 @@ export const useUserStore = defineStore('user', () => {
           const coachingStore = useCoachingStore()
           coachingStore.clearCache()
         })
-        
+
         import('./shows').then(({ useShowsStore }) => {
           const showsStore = useShowsStore()
           showsStore.clearCache()
@@ -343,7 +343,7 @@ export const useUserStore = defineStore('user', () => {
         // Clear team members cache
         const teamMembersCacheKey = `team_members_${newTeam}`
         sessionStorage.removeItem(teamMembersCacheKey)
-        
+
         // Clear any old team members cache if team changed
         if (previousTeam) {
           const oldTeamMembersCacheKey = `team_members_${previousTeam}`
@@ -423,13 +423,13 @@ export const useUserStore = defineStore('user', () => {
     user,
     isAuthenticated,
     allUsers,
-    
+
     // Computed
     isAdmin,
     isCaptain,
     canAccessAdmin,
     currentTeam,
-    
+
     // Actions
     login,
     logout,
@@ -442,8 +442,8 @@ export const useUserStore = defineStore('user', () => {
     refreshCurrentUser,
     updateUserRole,
     deleteUser,
-    
+
     // Persistent auth
     loadAuthState
   }
-}) 
+})
