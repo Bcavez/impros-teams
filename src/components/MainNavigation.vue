@@ -10,7 +10,7 @@
       <div class="nav-right">
         <div class="user-info">
           <span class="user-name">{{ userStore.user?.name }}</span>
-          <span class="team-badge">{{ userStore.currentTeam || 'No Team' }}</span>
+          <span class="team-badge">{{ userStore.currentTeam || 'Aucune équipe' }}</span>
         </div>
         
         <div class="nav-actions">
@@ -18,7 +18,7 @@
             @click="handleRefresh" 
             class="nav-button refresh-button"
             :disabled="isRefreshing"
-            :title="isRefreshing ? 'Refreshing...' : 'Refresh Data'"
+            :title="isRefreshing ? NAV_LABELS.refreshing : NAV_LABELS.refresh"
           >
             <svg 
               class="nav-icon" 
@@ -36,7 +36,7 @@
               <path d="M1 20v-6h6"/>
               <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
             </svg>
-            <span class="button-text">{{ isRefreshing ? 'Refreshing...' : 'Refresh' }}</span>
+            <span class="button-text">{{ isRefreshing ? NAV_LABELS.refreshing : NAV_LABELS.refresh }}</span>
           </button>
           
           <!-- Back to Dashboard button (when not on dashboard) -->
@@ -45,7 +45,7 @@
             to="/dashboard"
             class="nav-button dashboard-button"
           >
-            📊 Dashboard
+            📊 {{ NAV_LABELS.dashboard }}
           </router-link>
           
           <router-link
@@ -53,7 +53,7 @@
             to="/admin"
             class="nav-button admin-button"
           >
-            🛠️ <span class="button-text">Admin</span>
+            🛠️ <span class="button-text">{{ NAV_LABELS.admin }}</span>
           </router-link>
           
           <router-link
@@ -76,10 +76,28 @@
               <path d="M2 17l10 5 10-5"/>
               <path d="M2 12l10 5 10-5"/>
             </svg>
-            <span class="button-text">Captain</span>
+            <span class="button-text">{{ NAV_LABELS.captain }}</span>
           </router-link>
-          
-          <button @click="handleLogout" class="nav-button logout-button" title="Logout">
+
+          <button @click="accountModalOpen = true" class="nav-button account-button" :title="NAV_LABELS.account">
+            <svg
+              class="nav-icon"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+            <span class="button-text">{{ NAV_LABELS.account }}</span>
+          </button>
+
+          <button @click="handleLogout" class="nav-button logout-button" :title="NAV_LABELS.logout">
             <svg 
               class="nav-icon" 
               width="16" 
@@ -95,55 +113,50 @@
               <polyline points="16,17 21,12 16,7"/>
               <line x1="21" y1="12" x2="9" y2="12"/>
             </svg>
-            <span class="button-text">Logout</span>
+            <span class="button-text">{{ NAV_LABELS.logout }}</span>
           </button>
         </div>
       </div>
     </div>
   </nav>
+  <AccountModal v-model:open="accountModalOpen" />
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { useCoachingStore } from '@/stores/coaching'
-import { useShowsStore } from '@/stores/shows'
+import { queryClient } from '@/lib/query-client'
+import { NAV_LABELS } from '@/lib/strings'
+import AccountModal from '@/components/AccountModal.vue'
 
 const userStore = useUserStore()
-const coachingStore = useCoachingStore()
-const showsStore = useShowsStore()
 const route = useRoute()
 const router = useRouter()
 
 const isRefreshing = ref(false)
+const accountModalOpen = ref(false)
 
 const isOnAdminPage = computed(() => route.path === '/admin')
 const isOnCaptainPage = computed(() => route.path === '/captain')
 const isOnDashboardPage = computed(() => route.path === '/dashboard')
 
+/**
+ * Refreshing is a single `invalidateQueries()` sweep of the shared cache (spec.md Stage 3) —
+ * every view backed by a query composable refetches on its own, so this button no longer needs
+ * to know which stores exist or which of their bespoke caches to clear.
+ */
 const handleRefresh = async () => {
   if (isRefreshing.value) return
-  
+
   isRefreshing.value = true
-  
+
   try {
-    // Refresh data based on user role
-    if (userStore.isCaptain) {
-      // For captains, refresh current user data first (in case team changed), then coaching/shows data
-      await userStore.refreshCurrentUser()
-      await Promise.all([
-        coachingStore.refreshData(),
-        showsStore.refreshData()
-      ])
-    } else if (userStore.isAdmin) {
-      // For admin, refresh user data
+    await userStore.refreshCurrentUser()
+    if (userStore.isAdmin) {
       await userStore.getAllUsers()
-    } else {
-      // For all other users (including normal members), refresh current user data
-      // This will clear caches if team assignment changed
-      await userStore.refreshCurrentUser()
     }
+    await queryClient.invalidateQueries()
   } catch (error) {
     console.error('Error refreshing data:', error)
   } finally {
@@ -151,8 +164,8 @@ const handleRefresh = async () => {
   }
 }
 
-const handleLogout = () => {
-  userStore.logout()
+const handleLogout = async () => {
+  await userStore.logout()
   router.push('/login')
 }
 </script>
@@ -311,6 +324,17 @@ const handleLogout = () => {
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+.account-button {
+  background: #6c5ce7;
+  color: white;
+}
+
+.account-button:hover {
+  background: #5849c4;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
 }
 
 .logout-button {

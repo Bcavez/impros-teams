@@ -40,9 +40,13 @@ const router = createRouter({
 })
 
 // Navigation guards
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const userStore = useUserStore()
-  
+
+  // Wait for the session restore that main.ts kicked off before deciding anything — otherwise
+  // a returning user would be redirected to /login while their session is still loading.
+  await userStore.ensureAuthReady()
+
   // Check if route requires authentication
   if (to.meta.requiresAuth && !userStore.isAuthenticated) {
     next('/login')

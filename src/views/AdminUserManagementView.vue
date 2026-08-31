@@ -1,163 +1,133 @@
 <template>
   <div class="admin-dashboard">
     <MainNavigation />
-    
+
     <div class="admin-content">
       <div class="header">
         <div class="header-content">
           <div class="header-text">
-            <h1>Admin Dashboard</h1>
-            <p>Manage users, roles, and team assignments</p>
+            <h1>Administration des Utilisateurs</h1>
+            <p>Gérer les utilisateurs, rôles et affectations d'équipe</p>
           </div>
-          <router-link to="/dashboard" class="back-button">
-            ← Back to Dashboard
-          </router-link>
+          <router-link to="/dashboard" class="back-button"> ← Retour au Tableau de Bord </router-link>
         </div>
       </div>
 
-    <!-- Loading State -->
-    <div v-if="loading" class="loading">
-      <div class="spinner"></div>
-      <p>Loading users...</p>
-    </div>
-
-    <!-- Error State -->
-    <div v-else-if="error" class="error">
-      <p>{{ error }}</p>
-      <button @click="loadUsers" class="btn btn-primary">Retry</button>
-    </div>
-
-    <!-- Users Management -->
-    <div v-else class="users-management">
-      <!-- Stats -->
-      <div class="stats-grid">
-        <div class="stat-card">
-          <h3>Total Users</h3>
-          <p class="stat-number">{{ users.length }}</p>
-        </div>
-        <div class="stat-card">
-          <h3>Admins</h3>
-          <p class="stat-number">{{ adminCount }}</p>
-        </div>
-        <div class="stat-card">
-          <h3>Captains</h3>
-          <p class="stat-number">{{ captainCount }}</p>
-        </div>
-        <div class="stat-card">
-          <h3>Members</h3>
-          <p class="stat-number">{{ memberCount }}</p>
-        </div>
+      <!-- Loading State -->
+      <div v-if="loading" class="loading">
+        <div class="spinner"></div>
+        <p>Chargement des utilisateurs...</p>
       </div>
 
-      <!-- Users Table -->
-      <div class="users-table-container">
-        <h2>User Management</h2>
-        
-                 <!-- Search and Filter -->
-         <div class="table-controls">
-           <div class="search-box">
-             <input 
-               v-model="searchQuery" 
-               type="text" 
-               placeholder="Search users by name..."
-               class="search-input"
-             />
-           </div>
-          <div class="filter-controls">
-            <select v-model="roleFilter" class="filter-select">
-              <option value="">All Roles</option>
-              <option value="admin">Admin</option>
-              <option value="captain">Captain</option>
-              <option value="member">Member</option>
-            </select>
-            <select v-model="teamFilter" class="filter-select">
-              <option value="">All Teams</option>
-              <option value="Samurai">Samurai</option>
-              <option value="Gladiator">Gladiator</option>
-              <option value="Viking">Viking</option>
-            </select>
+      <!-- Error State -->
+      <div v-else-if="error" class="error">
+        <p>{{ error }}</p>
+        <button @click="loadUsers" class="btn btn-primary">Réessayer</button>
+      </div>
+
+      <!-- Users Management -->
+      <div v-else class="users-management">
+        <!-- Stats -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <h3>Total Utilisateurs</h3>
+            <p class="stat-number">{{ users.length }}</p>
+          </div>
+          <div class="stat-card">
+            <h3>Admins</h3>
+            <p class="stat-number">{{ adminCount }}</p>
+          </div>
+          <div class="stat-card">
+            <h3>Capitaines</h3>
+            <p class="stat-number">{{ captainCount }}</p>
+          </div>
+          <div class="stat-card">
+            <h3>Membres</h3>
+            <p class="stat-number">{{ memberCount }}</p>
           </div>
         </div>
 
         <!-- Users Table -->
-        <div class="table-wrapper">
-          <table class="users-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Team</th>
-                <th>Captain</th>
-                <th>Created</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="user in filteredUsers" :key="user.id" class="user-row">
-                <td>{{ user.name }}</td>
-                <td>{{ user.email }}</td>
-                <td>
-                  <select 
-                    v-model="user.role" 
-                    @change="updateUserRole(user)"
-                    :disabled="user.id === currentUser?.id"
-                    class="role-select"
-                  >
-                    <option value="member">Member</option>
-                    <option value="captain">Captain</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </td>
-                <td>
-                  <select 
-                    v-model="user.team" 
-                    @change="updateUserTeam(user)"
-                    class="team-select"
-                  >
-                    <option value="">No Team</option>
-                    <option value="Samurai">Samurai</option>
-                    <option value="Gladiator">Gladiator</option>
-                    <option value="Viking">Viking</option>
-                  </select>
-                </td>
-                <td>
-                  <input 
-                    type="checkbox" 
-                    v-model="user.is_captain"
-                    @change="updateUserCaptain(user)"
-                    :disabled="user.role !== 'captain'"
-                    class="captain-checkbox"
-                  />
-                </td>
-                <td>{{ formatDate(user.created_at) }}</td>
-                <td>
-                  <button 
-                    @click="deleteUser(user)"
-                    :disabled="user.id === currentUser?.id"
-                    class="btn btn-danger btn-small"
-                    title="Delete user"
-                  >
-                    🗑️
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <div class="users-table-container">
+          <h2>Gestion des Utilisateurs</h2>
 
-        <!-- Empty State -->
-        <div v-if="filteredUsers.length === 0" class="empty-state">
-          <p>No users found matching your criteria.</p>
+          <!-- Search and Filter -->
+          <div class="table-controls">
+            <div class="search-box">
+              <input
+                v-model="searchQuery"
+                type="text"
+                placeholder="Rechercher un utilisateur par nom..."
+                class="search-input"
+              />
+            </div>
+            <div class="filter-controls">
+              <select v-model="roleFilter" class="filter-select">
+                <option value="">Tous les rôles</option>
+                <option value="admin">Admin</option>
+                <option value="captain">Capitaine</option>
+                <option value="member">Membre</option>
+              </select>
+              <select v-model="teamFilter" class="filter-select">
+                <option value="">Toutes les équipes</option>
+                <option v-for="team in TEAMS" :key="team" :value="team">{{ team }}</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Users Table -->
+          <div class="table-wrapper">
+            <table class="users-table">
+              <thead>
+                <tr>
+                  <th>Nom</th>
+                  <th>Rôle</th>
+                  <th>Équipe</th>
+                  <th>Créé le</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="user in filteredUsers" :key="user.id" class="user-row">
+                  <td>{{ user.name }}</td>
+                  <td>
+                    <select
+                      :value="roleOf(user)"
+                      @change="updateUserRole(user, ($event.target as HTMLSelectElement).value as 'member' | 'captain')"
+                      :disabled="user.id === currentUser?.id"
+                      class="role-select"
+                    >
+                      <option value="member">Membre</option>
+                      <option value="captain">Capitaine</option>
+                    </select>
+                  </td>
+                  <td>
+                    <select
+                      :value="user.team ?? ''"
+                      @change="updateUserTeam(user, ($event.target as HTMLSelectElement).value)"
+                      class="team-select"
+                    >
+                      <option value="">Aucune équipe</option>
+                      <option v-for="team in TEAMS" :key="team" :value="team">{{ team }}</option>
+                    </select>
+                  </td>
+                  <td>{{ formatDate(user.created_at) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Empty State -->
+          <div v-if="filteredUsers.length === 0" class="empty-state">
+            <p>Aucun utilisateur ne correspond à vos critères.</p>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Success/Error Messages -->
-    <div v-if="message" :class="['message', messageType]">
-      {{ message }}
-      <button @click="clearMessage" class="message-close">×</button>
-    </div>
+      <!-- Success/Error Messages -->
+      <div v-if="message" :class="['message', messageType]">
+        {{ message }}
+        <button @click="clearMessage" class="message-close">×</button>
+      </div>
     </div>
   </div>
 </template>
@@ -165,12 +135,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useUserStore } from '@/stores/user'
+import { useUserStore, type Profile } from '@/stores/user'
 import { format } from 'date-fns'
+import { TEAMS, type Team } from '@/lib/teams'
 import MainNavigation from '@/components/MainNavigation.vue'
 
 const router = useRouter()
-
 const userStore = useUserStore()
 
 // State
@@ -186,114 +156,81 @@ const teamFilter = ref('')
 const users = computed(() => userStore.allUsers)
 const currentUser = computed(() => userStore.user)
 
-const adminCount = computed(() => users.value.filter(u => u.role === 'admin').length)
-const captainCount = computed(() => users.value.filter(u => u.role === 'captain').length)
-const memberCount = computed(() => users.value.filter(u => u.role === 'member').length)
+const roleOf = (user: Profile): 'admin' | 'captain' | 'member' => {
+  if (user.roles.includes('admin')) return 'admin'
+  if (user.roles.includes('captain')) return 'captain'
+  return 'member'
+}
+
+const adminCount = computed(() => users.value.filter((u) => u.roles.includes('admin')).length)
+const captainCount = computed(() => users.value.filter((u) => u.roles.includes('captain')).length)
+const memberCount = computed(() => users.value.filter((u) => !u.roles.includes('captain') && !u.roles.includes('admin')).length)
 
 const filteredUsers = computed(() => {
   let filtered = users.value
 
-  // Search filter
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
-    filtered = filtered.filter(user => 
-      user.name.toLowerCase().includes(query)
-    )
+    filtered = filtered.filter((user) => user.name.toLowerCase().includes(query))
   }
 
-  // Role filter
   if (roleFilter.value) {
-    filtered = filtered.filter(user => user.role === roleFilter.value)
+    filtered = filtered.filter((user) => roleOf(user) === roleFilter.value)
   }
 
-  // Team filter
   if (teamFilter.value) {
-    filtered = filtered.filter(user => user.team === teamFilter.value)
+    filtered = filtered.filter((user) => user.team === teamFilter.value)
   }
 
-  return filtered.sort((a, b) => a.name.localeCompare(b.name))
+  return [...filtered].sort((a, b) => a.name.localeCompare(b.name))
 })
 
 // Methods
 const loadUsers = async () => {
   loading.value = true
   error.value = ''
-  
+
   try {
     const result = await userStore.getAllUsers()
     if (!result.success) {
-      error.value = result.error || 'Failed to load users'
+      error.value = result.error || 'Échec du chargement des utilisateurs'
     }
-  } catch (err) {
-    error.value = 'An error occurred while loading users'
+  } catch {
+    error.value = "Une erreur s'est produite lors du chargement des utilisateurs"
   } finally {
     loading.value = false
   }
 }
 
-const updateUserRole = async (user: any) => {
-  try {
-    const result = await userStore.updateUserRole(user.id, user.role)
-    if (result.success) {
-      showMessage('User role updated successfully', 'success')
-    } else {
-      showMessage(result.error || 'Failed to update user role', 'error')
-      // Revert the change
-      await loadUsers()
-    }
-  } catch (err) {
-    showMessage('An error occurred while updating user role', 'error')
+/**
+ * Only commits after the API confirms — never optimistically mutates a v-model bound directly
+ * to the store row (improvements.md #14), so a rejected change (e.g. captain requires a team)
+ * doesn't leave the UI showing a role that was never actually saved.
+ */
+const updateUserRole = async (user: Profile, role: 'member' | 'captain') => {
+  const result = await userStore.setUserRole(user.id, role)
+  if (result.success) {
+    showMessage('Rôle mis à jour avec succès', 'success')
     await loadUsers()
+  } else {
+    showMessage(result.error || 'Échec de la mise à jour du rôle', 'error')
   }
 }
 
-const updateUserTeam = async (user: any) => {
-  try {
-    const result = await userStore.assignTeam(user.id, user.team)
-    if (result.success) {
-      showMessage('User team updated successfully', 'success')
-    } else {
-      showMessage(result.error || 'Failed to update user team', 'error')
-      // Revert the change
-      await loadUsers()
-    }
-  } catch (err) {
-    showMessage('An error occurred while updating user team', 'error')
+const updateUserTeam = async (user: Profile, team: string) => {
+  if (!team) {
+    showMessage("Impossible de retirer une équipe depuis cet écran", 'error')
     await loadUsers()
-  }
-}
-
-const updateUserCaptain = async (user: any) => {
-  try {
-    const result = await userStore.assignCaptainRole(user.id, user.is_captain)
-    if (result.success) {
-      showMessage('User captain status updated successfully', 'success')
-    } else {
-      showMessage(result.error || 'Failed to update user captain status', 'error')
-      // Revert the change
-      await loadUsers()
-    }
-  } catch (err) {
-    showMessage('An error occurred while updating user captain status', 'error')
-    await loadUsers()
-  }
-}
-
-const deleteUser = async (user: any) => {
-  if (!confirm(`Are you sure you want to delete ${user.name}? This action cannot be undone.`)) {
     return
   }
 
-  try {
-    const result = await userStore.deleteUser(user.id)
-    if (result.success) {
-      showMessage('User deleted successfully', 'success')
-      await loadUsers()
-    } else {
-      showMessage(result.error || 'Failed to delete user', 'error')
-    }
-  } catch (err) {
-    showMessage('An error occurred while deleting user', 'error')
+  const result = await userStore.assignTeam(user.id, team as Team)
+  if (result.success) {
+    showMessage("Équipe mise à jour avec succès", 'success')
+    await loadUsers()
+  } else {
+    showMessage(result.error || "Échec de la mise à jour de l'équipe", 'error')
+    await loadUsers()
   }
 }
 
@@ -313,7 +250,7 @@ const formatDate = (dateString: string) => {
   try {
     return format(new Date(dateString), 'MMM dd, yyyy')
   } catch {
-    return 'Unknown'
+    return 'Inconnu'
   }
 }
 
@@ -323,7 +260,7 @@ onMounted(async () => {
     router.push('/login')
     return
   }
-  
+
   await loadUsers()
 })
 </script>
@@ -387,11 +324,11 @@ onMounted(async () => {
     align-items: stretch;
     text-align: center;
   }
-  
+
   .header-text {
     text-align: center;
   }
-  
+
   .back-button {
     align-self: center;
   }
@@ -544,11 +481,6 @@ onMounted(async () => {
   min-width: 100px;
 }
 
-.captain-checkbox {
-  width: 18px;
-  height: 18px;
-}
-
 /* Buttons */
 .btn {
   padding: 8px 16px;
@@ -566,20 +498,6 @@ onMounted(async () => {
 
 .btn-primary:hover {
   background: #2980b9;
-}
-
-.btn-danger {
-  background: #e74c3c;
-  color: white;
-}
-
-.btn-danger:hover {
-  background: #c0392b;
-}
-
-.btn-small {
-  padding: 4px 8px;
-  font-size: 12px;
 }
 
 .btn:disabled {
@@ -633,15 +551,15 @@ onMounted(async () => {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .filter-controls {
     justify-content: space-between;
   }
-  
+
   .users-table {
     font-size: 14px;
   }
-  
+
   .users-table th,
   .users-table td {
     padding: 8px;

@@ -1,174 +1,154 @@
-# Team Management Dashboard PWA
+# Team Management Dashboard
 
-A Progressive Web Application (PWA) built with Vue.js 3, TypeScript, and Vite for managing team members, coaching sessions, and shows.
+A single-page app built with Vue 3, TypeScript, Vite, Pinia, Supabase, and TanStack Query for
+managing an improv theatre troupe's three teams (Samurai, Gladiator, Viking), their weekly
+coaching sessions, and their shows.
+
+[spec.md](./spec.md) documents the target-state behavior; [improvements.md](./improvements.md)
+is the original findings list the codebase has since been brought in line with; `tests/` is the
+spec-conformance test suite (`npm test`).
 
 ## Features
 
-### User Management
-- **User Authentication**: Login and registration system
-- **Role-based Access Control**: 
-  - Admin: Full access to all features
-  - Captain: Team-specific management capabilities
-  - Member: Basic team dashboard access
-- **Team Assignment**: Users can be assigned to one of three teams (Samurai, Gladiator, Viking)
+- **Authentication**: name + password login and self-registration via Supabase Auth, one account
+  per person (synthetic `name@impros.local` email under the hood — see spec.md §4).
+- **Roles**: member (default), captain (scoped to one team), admin (user management). See
+  spec.md §2 for the exact role model — note that admin does **not** automatically grant captain
+  privileges.
+- **Team dashboard**: upcoming coaching sessions and shows, set your own attendance/availability.
+- **Captain dashboard**: manage your team's coaching sessions and shows, set attendance for any
+  team member, assign a cast.
+- **Admin dashboard**: view, search, and filter all accounts; assign roles and teams.
+- **Account**: every user can change their own password from the "Mon compte" modal; a
+  dashboard-issued password reset forces this open on next login (`must_change_password`).
 
-### Team Dashboard
-- **Interactive Calendar**: View coaching sessions and shows
-- **Status Management**: Toggle attendance status (Present/Absent/Undecided) for events
-- **Visual Indicators**: Color-coded status display for easy tracking
+## Technology stack
 
-### Admin Dashboard (Captains & Admins)
-- **Coaching Management**:
-  - Create coaching sessions
-  - View attendance matrix
-  - Toggle member attendance status
-- **Show Management**:
-  - Create shows with descriptions
-  - Add show dates with member limits
-  - Assign up to 5 members per show date
-  - Track availability matrix
+- Vue 3 (Composition API, `<script setup>`) + TypeScript
+- Vite
+- Pinia for mutations/local UI state; TanStack Query (`@tanstack/vue-query`) for server-state
+  reads and cache invalidation (see `src/queries/`)
+- Vue Router
+- Supabase (Postgres + PostgREST + Auth + Row Level Security) as the backend
+- `date-fns` for date formatting
+- Vitest + `@vue/test-utils` for tests
 
-## Technology Stack
-
-- **Frontend**: Vue.js 3 with Composition API
-- **TypeScript**: For type safety
-- **State Management**: Pinia
-- **Routing**: Vue Router 4
-- **Build Tool**: Vite
-- **PWA**: Vite Plugin PWA
-- **Date Handling**: date-fns
-- **Styling**: CSS with modern design
-
-## Getting Started
+## Getting started
 
 ### Prerequisites
-- Node.js (v16 or higher)
-- npm or yarn
 
-### Installation
+- Node.js `^20.19.0` or `>=22.12.0` (see `package.json` `engines`)
+- A Supabase project (free tier is enough)
 
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd team-management-pwa
-```
+### Setup
 
-2. Install dependencies:
-```bash
-npm install
-```
+1. Install dependencies:
 
-3. Start the development server:
-```bash
-npm run dev
-```
+   ```bash
+   npm install
+   ```
 
-4. Open your browser and navigate to `http://localhost:5173`
+2. Copy `env.example` to `.env` and fill in your Supabase project's URL and anon key (Project
+   Settings → API in the Supabase dashboard):
 
-### Building for Production
+   ```bash
+   cp env.example .env
+   ```
 
-```bash
-npm run build
-```
+3. In the Supabase dashboard, go to **Authentication → Providers → Email** and turn **off
+   "Confirm email"**. Accounts use a synthetic `@impros.local` address that can't receive mail, so
+   with confirmation on, `signUp` never returns a session and registration silently breaks.
 
-The built files will be in the `dist` directory, ready for deployment.
+4. Apply the database schema: run `supabase/migrations/017_target_baseline.sql` then
+   `supabase/migrations/018_rls_and_triggers.sql` via the Supabase SQL editor or CLI. Older
+   migrations live under `supabase/migrations/archive/` for history only — do not apply them.
 
-## Demo Credentials
+5. Optionally seed a season's recurring coaching sessions with
+   `supabase/seed-coaching-sessions.sql` (idempotent — safe to re-run).
 
-For testing purposes, the following demo accounts are available:
+6. Start the dev server:
 
-| Role | Email | Team |
-|------|-------|------|
-| Admin | admin@example.com | - |
-| Samurai Captain | samurai@example.com | Samurai |
-| Gladiator Captain | gladiator@example.com | Gladiator |
-| Viking Captain | viking@example.com | Viking |
-| Samurai Member | member1@example.com | Samurai |
+   ```bash
+   npm run dev
+   ```
 
-## Application Structure
+   Open `http://localhost:5173`. There are no seeded demo accounts — register a user, then
+   promote it to admin directly in the Supabase SQL editor:
+
+   ```sql
+   update profiles set roles = array['member','admin'] where name = 'Your Name';
+   ```
+
+### Available scripts
+
+| Script | Purpose |
+|---|---|
+| `npm run dev` | Start the Vite dev server |
+| `npm run build` | Type-check and build for production |
+| `npm run preview` | Preview the production build locally |
+| `npm run type-check` | Run `vue-tsc` |
+| `npm run lint` | Run ESLint with autofix |
+| `npm test` | Run the Vitest suite once |
+| `npm run test:watch` | Run Vitest in watch mode |
+| `npm run test:coverage` | Run Vitest with coverage |
+
+### Login
+
+Login is **name-based**, not email-based: enter the name you registered with and your password.
+Names are unique by their slugified form (accents/case/punctuation-insensitive), so "Jean-Luc" and
+"Jean Luc" are treated as the same account.
+
+## Admin operations outside the browser (spec.md §9)
+
+Deleting a user or resetting a forgotten password both require the Supabase `service_role` key,
+which must never reach the browser. Do these from the Supabase dashboard instead:
+
+- **Delete a user**: Authentication → Users → delete. The `profiles` row cascades automatically.
+- **Reset a password**: Authentication → Users → the user → "Send password recovery" or set a new
+  password directly, then flip their `must_change_password` flag in the SQL editor so the app
+  forces them to pick a new one on next login:
+
+  ```sql
+  update profiles set must_change_password = true where name = 'Their Name';
+  ```
+
+## Project structure
 
 ```
 src/
-├── components/          # Reusable Vue components
-├── router/             # Vue Router configuration
-├── stores/             # Pinia stores
-│   ├── user.ts        # User authentication & management
-│   ├── coaching.ts    # Coaching sessions & attendance
-│   └── shows.ts       # Shows & availability tracking
-├── views/              # Page components
-│   ├── LoginView.vue  # Authentication page
-│   ├── TeamDashboardView.vue    # Team member dashboard
-│   └── AdminDashboardView.vue   # Admin/captain dashboard
-└── main.ts            # Application entry point
+├── components/        # Shared Vue components (MainNavigation, AccountModal)
+├── lib/                # Supabase client, permissions, teams/roles, query-client, strings
+├── queries/            # TanStack Query composables (team-scoped reads, shared cache)
+├── router/             # Vue Router configuration and navigation guards
+├── stores/             # Pinia stores: user, coaching, shows (mutations + invalidation)
+├── views/              # Route-level components
+│   ├── LoginView.vue
+│   ├── TeamDashboardView.vue          (/dashboard — any member)
+│   ├── CaptainDashboardView.vue       (/captain — captains)
+│   └── AdminUserManagementView.vue    (/admin — admins)
+└── main.ts
+tests/
+├── fixtures/           Shared test data
+├── helpers/            In-memory Supabase fake, Vitest setup
+├── lib/                Tests for pure helper modules
+├── stores/             Tests for the three Pinia stores
+├── queries/            Tests for query keys and cache invalidation
+├── router/             Tests for navigation guards
+├── components/         Tests for shared components
+└── views/              Component tests
+supabase/
+├── migrations/         Baseline schema + RLS/trigger migration (archive/ is history only)
+└── seed-coaching-sessions.sql
 ```
-
-## PWA Features
-
-- **Offline Support**: Service worker for offline functionality
-- **Installable**: Can be installed as a native app
-- **Responsive Design**: Works on desktop and mobile devices
-- **Fast Loading**: Optimized for performance
-
-## Key Features
-
-### Authentication Flow
-1. Users start at the login page
-2. After successful authentication, they're redirected based on their role:
-   - Admins/Captains → Admin Dashboard
-   - Members → Team Dashboard
-
-### Team Dashboard
-- Interactive calendar showing coaching sessions and shows
-- Click on dates to toggle attendance status
-- Visual status indicators (green=present, red=absent, yellow=undecided)
-
-### Admin Dashboard
-- **Coaching Tab**: Manage coaching sessions and view attendance
-- **Shows Tab**: Create shows, add dates, assign members, track availability
-- Modal forms for creating new sessions and shows
-- Interactive attendance/availability matrices
-
-## Development
-
-### Available Scripts
-
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm run type-check` - Run TypeScript type checking
-- `npm run lint` - Run ESLint
-
-### Adding New Features
-
-1. **New Store**: Create a new Pinia store in `src/stores/`
-2. **New View**: Add a new Vue component in `src/views/`
-3. **New Route**: Update `src/router/index.ts`
-4. **Styling**: Use scoped CSS in components or global styles in `src/App.vue`
-
-## Deployment
-
-The application is built as a PWA and can be deployed to any static hosting service:
-
-- **Netlify**: Drag and drop the `dist` folder
-- **Vercel**: Connect your repository for automatic deployments
-- **GitHub Pages**: Deploy from the `dist` directory
-- **Firebase Hosting**: Use Firebase CLI to deploy
-
-## Browser Support
-
-- Chrome (recommended for PWA features)
-- Firefox
-- Safari
-- Edge
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests and type checking
-5. Submit a pull request
+1. Read [spec.md](./spec.md) for the target behavior and [improvements.md](./improvements.md) for
+   the original findings list before changing anything non-trivial.
+2. Run `npm test` and `npm run type-check` before opening a change.
+3. Keep user-facing strings in French (see `src/lib/strings.ts` for shared ones); keep code,
+   comments, and documentation in English.
 
 ## License
 
-This project is licensed under the MIT License.
+MIT.

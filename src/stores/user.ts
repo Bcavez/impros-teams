@@ -1,421 +1,290 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { supabase } from '@/lib/supabase'
-import type { Database } from '@/lib/supabase'
-import { hashPassword, comparePassword, isBcryptHash, validatePassword } from '@/lib/password-utils'
+import { syntheticEmail } from '@/lib/auth-identity'
+import { validatePassword } from '@/lib/password-policy'
+import { isAdmin as checkIsAdmin, isCaptain as checkIsCaptain } from '@/lib/permissions'
+import type { Team } from '@/lib/teams'
 
-type User = Database['public']['Tables']['users']['Row']
-
-export interface AuthState {
-  user: User | null
-  isAuthenticated: boolean
+export interface Profile {
+  id: string
+  name: string
+  slug: string
+  roles: string[]
+  team: Team | null
+  must_change_password: boolean
+  created_at: string
 }
 
 export const useUserStore = defineStore('user', () => {
-  const user = ref<User | null>(null)
+  const user = ref<Profile | null>(null)
   const isAuthenticated = ref(false)
-  const allUsers = ref<User[]>([])
+  const allUsers = ref<Profile[]>([])
+  const authReady = ref(false)
+  let authReadyPromise: Promise<void> | null = null
 
-  // Persistent authentication functions
-  const saveAuthState = (userData: User) => {
-    try {
-      localStorage.setItem('auth_user', JSON.stringify(userData))
-      localStorage.setItem('auth_authenticated', 'true')
-    } catch (error) {
-      console.error('Failed to save auth state:', error)
-    }
+  const isAdmin = computed(() => (user.value ? checkIsAdmin(user.value) : false))
+  const isCaptain = computed(() => (user.value ? checkIsCaptain(user.value) : false))
+  const canAccessAdmin = computed(() => isAdmin.value)
+  const currentTeam = computed(() => user.value?.team ?? null)
+
+  const fetchProfile = async (id: string): Promise<Profile | null> => {
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single()
+    if (error || !data) return null
+    return data as unknown as Profile
   }
 
-  const loadAuthState = async () => {
+  /**
+   * Restores the session from Supabase Auth's local storage (a fast local token read), then
+   * fetches the matching profile. Never trusts anything about role/team from client storage —
+   * see spec.md §4 and improvements.md P0 #5.
+   */
+  const restoreSession = async (): Promise<boolean> => {
     try {
-      const savedUser = localStorage.getItem('auth_user')
-      const isAuth = localStorage.getItem('auth_authenticated')
+      const { data } = await supabase.auth.getSession()
+      const authUser = data.session?.user
+      if (!authUser) return false
 
-      if (savedUser && isAuth === 'true') {
-        const userData = JSON.parse(savedUser)
-        user.value = userData
-        isAuthenticated.value = true
+      const profile = await fetchProfile(authUser.id)
+      if (!profile) return false
 
-        // Initialize stores after restoring authentication state
-        console.log('🔄 Initializing stores after auth state restore...')
-        const { useCoachingStore } = await import('./coaching')
-        const { useShowsStore } = await import('./shows')
-
-        const coachingStore = useCoachingStore()
-        const showsStore = useShowsStore()
-
-        await Promise.all([
-          coachingStore.fetchCoachingSessions(undefined, true),
-          coachingStore.fetchAttendanceRecords(undefined, true),
-          showsStore.fetchShows(true),
-          showsStore.fetchShowDates(true),
-          showsStore.fetchShowAssignments(true),
-          showsStore.fetchShowAvailability(true)
-        ])
-
-        // Cache team members for the user's team
-        const teamMembersResult = await getUsersByTeam(userData.team || 'Samurai')
-        if (teamMembersResult.success) {
-          const teamMembersCacheKey = `team_members_${userData.team}`
-          sessionStorage.setItem(teamMembersCacheKey, JSON.stringify(teamMembersResult.users))
-        }
-
-        sessionStorage.setItem('stores_initialized', 'true')
-
-        return true
-      }
-      return false
-    } catch (error) {
-      console.error('Failed to load auth state:', error)
+      user.value = profile
+      isAuthenticated.value = true
+      return true
+    } catch {
       return false
     }
   }
 
-  const clearAuthState = () => {
-    try {
-      localStorage.removeItem('auth_user')
-      localStorage.removeItem('auth_authenticated')
-    } catch (error) {
-      console.error('Failed to clear auth state:', error)
+  /**
+   * Runs restoreSession() exactly once, memoized, so App.vue's loading gate and the router
+   * guard can both await the same in-flight restore instead of racing two separate calls
+   * (spec.md — replaces the sessionStorage `stores_initialized` hack).
+   */
+  const ensureAuthReady = (): Promise<void> => {
+    if (!authReadyPromise) {
+      authReadyPromise = restoreSession().then(
+        () => {
+          authReady.value = true
+        },
+        () => {
+          authReady.value = true
+        },
+      )
     }
+    return authReadyPromise
   }
 
-  // Computed properties
-  const isAdmin = computed(() => user.value?.role === 'admin')
-  const isCaptain = computed(() => user.value?.role === 'captain' || user.value?.is_captain)
-  const canAccessAdmin = computed(() => isAdmin.value) // Only admins can access admin dashboard
-  const currentTeam = computed(() => user.value?.team)
-
-  // Actions
   const login = async (name: string, password: string) => {
     try {
-      // Get user by name
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('name', name.trim())
-        .single()
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: syntheticEmail(name),
+        password,
+      })
 
-      if (error || !data) {
-        return { success: false, error: 'Invalid credentials' }
+      if (error || !data.user) {
+        return { success: false, error: 'Identifiants invalides' }
       }
 
-      // Check if user has a bcrypt hash or legacy plain text
-      let isPasswordValid = false
-
-      if (isBcryptHash(data.password_hash)) {
-        // User has bcrypt hash - compare with bcrypt
-        isPasswordValid = await comparePassword(password, data.password_hash)
-      } else {
-        // Legacy plain text password - check directly (for backward compatibility)
-        isPasswordValid = data.password_hash === password || data.password_hash === 'default_password_hash'
+      const profile = await fetchProfile(data.user.id)
+      if (!profile) {
+        return { success: false, error: 'Profil introuvable' }
       }
 
-      if (isPasswordValid) {
-        user.value = data
-        isAuthenticated.value = true
-        saveAuthState(data) // Save authentication state
-        return { success: true, user: data }
-      } else {
-        return { success: false, error: 'Invalid credentials' }
-      }
-    } catch (error) {
-      return { success: false, error: 'Login failed' }
+      user.value = profile
+      isAuthenticated.value = true
+      return { success: true, user: profile }
+    } catch {
+      return { success: false, error: 'Échec de la connexion' }
     }
   }
 
-  const logout = () => {
+  const register = async (name: string, password: string) => {
+    const validation = validatePassword(password)
+    if (!validation.isValid) {
+      return { success: false, error: validation.errors.join(', ') }
+    }
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: syntheticEmail(name),
+        password,
+        options: { data: { name: name.trim() } },
+      })
+
+      if (error) {
+        return { success: false, error: error.message }
+      }
+      if (!data.user) {
+        return { success: false, error: "Échec de l'inscription" }
+      }
+
+      const profile = await fetchProfile(data.user.id)
+      if (!profile) {
+        return { success: false, error: 'Profil introuvable après inscription' }
+      }
+
+      user.value = profile
+      isAuthenticated.value = true
+      return { success: true, user: profile }
+    } catch {
+      return { success: false, error: "Échec de l'inscription" }
+    }
+  }
+
+  const logout = async () => {
+    await supabase.auth.signOut()
     user.value = null
     isAuthenticated.value = false
-    clearAuthState() // Clear persistent authentication state
 
-    // Clear all cache when user logs out
-    import('./coaching').then(({ useCoachingStore }) => {
-      const coachingStore = useCoachingStore()
-      coachingStore.clearCache()
-    })
-
-    import('./shows').then(({ useShowsStore }) => {
-      const showsStore = useShowsStore()
-      showsStore.clearCache()
-    })
+    import('./coaching').then(({ useCoachingStore }) => useCoachingStore().clearCache())
+    import('./shows').then(({ useShowsStore }) => useShowsStore().clearCache())
   }
 
-  const register = async (name: string, email: string, password: string) => {
-    try {
-      // Hash the password with bcrypt
-      const hashedPassword = await hashPassword(password)
-
-      const newUser = {
-        name: name.trim(),
-        email,
-        password_hash: hashedPassword, // Store the hashed password
-        role: 'member' as const,
-        team: null,
-        is_captain: false
-      }
-
-      const { data, error } = await supabase
-        .from('users')
-        .insert(newUser)
-        .select()
-        .single()
-
-      if (error) {
-        return { success: false, error: error.message }
-      }
-
-      if (data) {
-        user.value = data
-        isAuthenticated.value = true
-        saveAuthState(data) // Save authentication state
-        return { success: true, user: data }
-      }
-
-      return { success: false, error: 'Registration failed' }
-    } catch (error) {
-      return { success: false, error: 'Registration failed' }
-    }
-  }
-
-  const updateProfile = async (updates: Partial<User>) => {
+  const changePassword = async (currentPassword: string, newPassword: string) => {
     if (!user.value) {
-      return { success: false, error: 'No user logged in' }
+      return { success: false, error: 'Aucun utilisateur connecté' }
     }
 
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .update(updates)
-        .eq('id', user.value.id)
-        .select()
-        .single()
-
-      if (error) {
-        return { success: false, error: error.message }
-      }
-
-      if (data) {
-        user.value = data
-        saveAuthState(data) // Update saved authentication state
-        return { success: true, user: data }
-      }
-
-      return { success: false, error: 'Update failed' }
-    } catch (error) {
-      return { success: false, error: 'Update failed' }
+    const validation = validatePassword(newPassword)
+    if (!validation.isValid) {
+      return { success: false, error: validation.errors.join(', ') }
     }
+
+    // Re-authenticate with the current password before allowing the change.
+    const reauth = await supabase.auth.signInWithPassword({
+      email: syntheticEmail(user.value.name),
+      password: currentPassword,
+    })
+    if (reauth.error) {
+      return { success: false, error: 'Mot de passe actuel incorrect' }
+    }
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (error) {
+      return { success: false, error: error.message }
+    }
+
+    if (user.value.must_change_password) {
+      await supabase.from('profiles').update({ must_change_password: false }).eq('id', user.value.id)
+      user.value = { ...user.value, must_change_password: false }
+    }
+
+    return { success: true }
   }
 
-  const assignTeam = async (userId: string, team: 'Samurai' | 'Gladiator' | 'Viking') => {
-    if (!user.value || (!isAdmin.value && !(isCaptain.value && user.value.team === team))) {
-      return { success: false, error: 'Unauthorized' }
-    }
-
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({ team })
-        .eq('id', userId)
-
-      if (error) {
-        return { success: false, error: error.message }
-      }
-
-      return { success: true }
-    } catch (error) {
-      return { success: false, error: 'Assignment failed' }
-    }
-  }
-
-  const assignCaptainRole = async (userId: string, isCaptain: boolean) => {
+  /** Admin-only: assigns a user to a team. Team assignment is never available to captains
+   * (spec.md §3) — a captain moving members between teams was the "poaching" bug this closes. */
+  const assignTeam = async (userId: string, team: Team) => {
     if (!isAdmin.value) {
-      return { success: false, error: 'Only admins can assign captain role' }
+      return { success: false, error: 'Seuls les administrateurs peuvent assigner une équipe' }
     }
 
     try {
+      const { error } = await supabase.from('profiles').update({ team }).eq('id', userId)
+      if (error) {
+        return { success: false, error: error.message }
+      }
+      return { success: true }
+    } catch {
+      return { success: false, error: "Échec de l'assignation" }
+    }
+  }
+
+  /**
+   * Admin-only: sets a user's role to member or captain, preserving an existing `admin` role
+   * if present (admin is never assignable from the UI — spec.md §10.4).
+   */
+  const setUserRole = async (userId: string, role: 'member' | 'captain') => {
+    if (!isAdmin.value) {
+      return { success: false, error: 'Seuls les administrateurs peuvent modifier les rôles' }
+    }
+
+    const target = allUsers.value.find((u) => u.id === userId) ?? (await fetchProfile(userId))
+    if (role === 'captain' && !target?.team) {
+      return {
+        success: false,
+        error: "Ce membre doit d'abord être assigné à une équipe avant de devenir capitaine",
+      }
+    }
+
+    const preservedAdmin = target?.roles.includes('admin') ? ['admin'] : []
+    const newRoles = role === 'captain' ? ['member', 'captain', ...preservedAdmin] : ['member', ...preservedAdmin]
+
+    try {
       const { data, error } = await supabase
-        .from('users')
-        .update({
-          is_captain: isCaptain
-        })
+        .from('profiles')
+        .update({ roles: newRoles })
         .eq('id', userId)
-        .select()
+        .select('*')
         .single()
 
       if (error) {
         return { success: false, error: error.message }
       }
 
-      // Update local state
-      const index = allUsers.value.findIndex(u => u.id === userId)
+      const index = allUsers.value.findIndex((u) => u.id === userId)
       if (index !== -1) {
-        allUsers.value[index] = data
+        allUsers.value[index] = data as unknown as Profile
       }
-
-      // Update current user if it's the same user
       if (user.value?.id === userId) {
-        user.value = data
-        saveAuthState(data) // Update saved authentication state
+        user.value = data as unknown as Profile
       }
 
       return { success: true, user: data }
-    } catch (error) {
-      return { success: false, error: 'Role assignment failed' }
+    } catch {
+      return { success: false, error: 'Échec de la modification du rôle' }
     }
   }
 
-  const getUsersByTeam = async (team: 'Samurai' | 'Gladiator' | 'Viking') => {
+  const getUsersByTeam = async (team: Team) => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('team', team)
-
+      const { data, error } = await supabase.from('profiles').select('*').eq('team', team)
       if (error) {
         return { success: false, error: error.message, users: [] }
       }
-
-      return { success: true, users: data || [] }
-    } catch (error) {
-      return { success: false, error: 'Failed to fetch users', users: [] }
+      return { success: true, users: (data ?? []) as unknown as Profile[] }
+    } catch {
+      return { success: false, error: 'Échec du chargement des membres', users: [] }
     }
   }
 
   const getAllUsers = async () => {
     if (!isAdmin.value) {
-      return { success: false, error: 'Only admins can view all users', users: [] }
+      return { success: false, error: 'Seuls les administrateurs peuvent voir tous les utilisateurs', users: [] }
     }
 
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .order('name')
-
+      const { data, error } = await supabase.from('profiles').select('*').order('name')
       if (error) {
         return { success: false, error: error.message, users: [] }
       }
-
-      allUsers.value = data || []
-      return { success: true, users: data || [] }
-    } catch (error) {
-      return { success: false, error: 'Failed to fetch users', users: [] }
+      allUsers.value = (data ?? []) as unknown as Profile[]
+      return { success: true, users: allUsers.value }
+    } catch {
+      return { success: false, error: 'Échec du chargement des utilisateurs', users: [] }
     }
   }
 
   const refreshCurrentUser = async () => {
     if (!user.value?.id) {
-      return { success: false, error: 'No current user' }
+      return { success: false, error: 'Aucun utilisateur connecté' }
     }
 
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', user.value.id)
-        .single()
-
-      if (error) {
-        return { success: false, error: error.message }
-      }
-
-      // Check if team assignment changed
-      const previousTeam = user.value.team
-      const newTeam = data.team
-
-      user.value = data
-      saveAuthState(data)
-
-      // If team assignment changed, clear relevant caches
-      if (previousTeam !== newTeam) {
-        // Clear coaching and shows cache to fetch new team's data
-        import('./coaching').then(({ useCoachingStore }) => {
-          const coachingStore = useCoachingStore()
-          coachingStore.clearCache()
-        })
-
-        import('./shows').then(({ useShowsStore }) => {
-          const showsStore = useShowsStore()
-          showsStore.clearCache()
-        })
-
-        // Clear team members cache
-        const teamMembersCacheKey = `team_members_${newTeam}`
-        sessionStorage.removeItem(teamMembersCacheKey)
-
-        // Clear any old team members cache if team changed
-        if (previousTeam) {
-          const oldTeamMembersCacheKey = `team_members_${previousTeam}`
-          sessionStorage.removeItem(oldTeamMembersCacheKey)
-        }
-      }
-
-      return { success: true, user: data }
-    } catch (error) {
-      return { success: false, error: 'Failed to refresh user data' }
-    }
-  }
-
-
-
-  const updateUserRole = async (userId: string, role: 'admin' | 'captain' | 'member') => {
-    if (!isAdmin.value) {
-      return { success: false, error: 'Only admins can update user roles' }
+    const previousTeam = user.value.team
+    const profile = await fetchProfile(user.value.id)
+    if (!profile) {
+      return { success: false, error: 'Échec du rafraîchissement du profil' }
     }
 
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .update({ role })
-        .eq('id', userId)
-        .select()
-        .single()
+    user.value = profile
 
-      if (error) {
-        return { success: false, error: error.message }
-      }
-
-      // Update local state
-      const index = allUsers.value.findIndex(u => u.id === userId)
-      if (index !== -1) {
-        allUsers.value[index] = data
-      }
-
-      // Update current user if it's the same user
-      if (user.value?.id === userId) {
-        user.value = data
-        saveAuthState(data) // Update saved authentication state
-      }
-
-      return { success: true, user: data }
-    } catch (error) {
-      return { success: false, error: 'Failed to update user role' }
-    }
-  }
-
-  const deleteUser = async (userId: string) => {
-    if (!isAdmin.value) {
-      return { success: false, error: 'Only admins can delete users' }
+    if (previousTeam !== profile.team) {
+      import('./coaching').then(({ useCoachingStore }) => useCoachingStore().clearCache())
+      import('./shows').then(({ useShowsStore }) => useShowsStore().clearCache())
     }
 
-    try {
-      const { error } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', userId)
-
-      if (error) {
-        return { success: false, error: error.message }
-      }
-
-      // Remove from local state
-      allUsers.value = allUsers.value.filter(u => u.id !== userId)
-
-      return { success: true }
-    } catch (error) {
-      return { success: false, error: 'Failed to delete user' }
-    }
+    return { success: true, user: profile }
   }
 
   return {
@@ -423,6 +292,7 @@ export const useUserStore = defineStore('user', () => {
     user,
     isAuthenticated,
     allUsers,
+    authReady,
 
     // Computed
     isAdmin,
@@ -434,16 +304,14 @@ export const useUserStore = defineStore('user', () => {
     login,
     logout,
     register,
-    updateProfile,
+    changePassword,
     assignTeam,
-    assignCaptainRole,
+    setUserRole,
     getUsersByTeam,
     getAllUsers,
     refreshCurrentUser,
-    updateUserRole,
-    deleteUser,
 
-    // Persistent auth
-    loadAuthState
+    // Session bootstrap
+    ensureAuthReady,
   }
 })

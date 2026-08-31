@@ -99,24 +99,24 @@
               <thead>
                 <tr>
                   <th>Membre</th>
-                  <th v-for="showDate in allTeamShowDates" :key="showDate.id">
-                    {{ getShowName(showDate.show_id) }} - {{ formatDate(showDate.date) }}
+                  <th v-for="show in teamShows" :key="show.id">
+                    {{ show.name }} - {{ formatDate(show.date) }}
                   </th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="member in availabilityMatrix" :key="member.userId">
                   <td class="member-name">{{ member.userName }}</td>
-                  <td 
-                    v-for="showDate in member.showDates" 
-                    :key="showDate.showDateId"
+                  <td
+                    v-for="show in member.shows"
+                    :key="show.showId"
                     :class="[
                       'attendance-cell',
-                      `status-${showDate.status}`
+                      `status-${show.status}`
                     ]"
-                    @click="toggleShowAvailability(member.userId, showDate.showDateId, showDate.status)"
+                    @click="toggleShowAvailability(member.userId, show.showId, show.status)"
                   >
-                    {{ getStatusLabel(showDate.status) }}
+                    {{ getStatusLabel(show.status) }}
                   </td>
                 </tr>
               </tbody>
@@ -135,27 +135,13 @@
           <div v-for="show in teamShows" :key="show.id" class="show-card">
             <div class="show-info">
               <h3>{{ show.name }}</h3>
-              <div v-for="showDate in getShowDates(show.id)" :key="showDate.id" class="show-date-info">
-                <span class="date">{{ formatDate(showDate.date) }}</span>
-                <span class="members">{{ getAssignedMembers(showDate.id).length }}/5 membres</span>
+              <div class="show-date-info">
+                <span class="date">{{ formatDate(show.date) }}</span>
+                <span class="members">{{ getAssignedMembers(show.id).length }}/{{ show.max_cast }} membres</span>
               </div>
             </div>
             <div class="show-actions">
-              <button 
-                v-if="!getShowDates(show.id).length" 
-                @click="showCreateShowDateModal = true; selectedShow = show" 
-                class="secondary-button"
-              >
-                Ajouter Date
-              </button>
-              <button 
-                v-else 
-                @click="openUpdateShowDateModal(show)" 
-                class="secondary-button"
-              >
-                Modifier Date
-              </button>
-              <button @click="openAssignMembersModal(getShowDates(show.id)[0])" class="secondary-button">
+              <button @click="openAssignMembersModal(show)" class="secondary-button">
                 Assigner Membres
               </button>
               <button @click="confirmDeleteShow(show.id)" class="delete-button">
@@ -218,6 +204,10 @@
               placeholder="Entrez le nom du spectacle"
             />
           </div>
+          <div class="form-group">
+            <label for="show-date">Date</label>
+            <input id="show-date" v-model="newShow.date" type="date" required />
+          </div>
 
           <div class="modal-actions">
             <button type="button" @click="showCreateShowModal = false" class="cancel-button">
@@ -230,58 +220,6 @@
         </form>
       </div>
     </div>
-
-         <!-- Create Show Date Modal -->
-     <div v-if="showCreateShowDateModal" class="modal-overlay" @click="showCreateShowDateModal = false">
-       <div class="modal" @click.stop>
-         <h3>Ajouter Date de Spectacle</h3>
-         <form @submit.prevent="createShowDate">
-           <div class="form-group">
-             <label for="show-date">Date</label>
-             <input
-               id="show-date"
-               v-model="newShowDate.date"
-               type="date"
-               required
-             />
-           </div>
-           <div class="modal-actions">
-             <button type="button" @click="showCreateShowDateModal = false" class="cancel-button">
-               Annuler
-             </button>
-             <button type="submit" class="primary-button">
-               Créer
-             </button>
-           </div>
-         </form>
-       </div>
-     </div>
-
-           <!-- Update Show Date Modal -->
-      <div v-if="showUpdateShowDateModal" class="modal-overlay" @click="showUpdateShowDateModal = false">
-        <div class="modal" @click.stop>
-          <h3>Modifier Date de Spectacle</h3>
-          <form @submit.prevent="updateShowDate">
-            <div class="form-group">
-              <label for="update-show-date">Date</label>
-              <input
-                id="update-show-date"
-                v-model="updateShowDateData.date"
-                type="date"
-                required
-              />
-            </div>
-            <div class="modal-actions">
-              <button type="button" @click="showUpdateShowDateModal = false" class="cancel-button">
-                Annuler
-              </button>
-              <button type="submit" class="primary-button">
-                Mettre à Jour
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
 
       <!-- Assign Members Modal -->
       <div v-if="showAssignMembersModal" class="modal-overlay" @click="showAssignMembersModal = false">
@@ -405,6 +343,8 @@ import { useUserStore } from '@/stores/user'
 import { useCoachingStore } from '@/stores/coaching'
 import { useShowsStore } from '@/stores/shows'
 import { format, parseISO } from 'date-fns'
+import { isPastDate } from '@/lib/permissions'
+import { ATTENDANCE_STATUS_LABELS, CONFIRM_MESSAGES } from '@/lib/strings'
 import MainNavigation from '@/components/MainNavigation.vue'
 
 const router = useRouter()
@@ -417,11 +357,9 @@ const activeTab = ref<'coaching' | 'shows'>('coaching')
 // Modal states
 const showCreateCoachingModal = ref(false)
 const showCreateShowModal = ref(false)
-const showCreateShowDateModal = ref(false)
-const showUpdateShowDateModal = ref(false)
 const showAssignMembersModal = ref(false)
 const showStatusModal = ref(false)
-const selectedEvent = ref<any>(null)
+const selectedEvent = ref<{ type: 'coaching'; date: string; title: string; userId: string; sessionId: string } | null>(null)
 const selectedAttendanceStatus = ref<'present' | 'absent' | 'undecided'>('present')
 
 // Coaching session editing
@@ -433,271 +371,148 @@ const showEditCoachModal = ref(false)
 const newCoachingDate = ref('')
 const newCoachingCoach = ref('')
 const newShow = ref({
-  name: ''
-})
-const newShowDate = ref({
-  date: ''
+  name: '',
+  date: '',
 })
 
-const updateShowDateData = ref({
-  date: ''
-})
-
-const selectedShow = ref<any>(null)
-const selectedShowDate = ref<any>(null)
+const selectedShow = ref<{ id: string } | null>(null)
 
 // Computed properties
 const teamCoachingSessions = computed(() => {
-  const sessions = coachingStore.sessionsByTeam(userStore.currentTeam || 'Samurai')
-  return sessions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) // Sort by date, oldest first
+  if (!userStore.currentTeam) return []
+  const sessions = coachingStore.sessionsByTeam(userStore.currentTeam)
+  return sessions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 })
 
 const teamShows = computed(() => {
-  return showsStore.showsByTeam(userStore.currentTeam || 'Samurai')
+  if (!userStore.currentTeam) return []
+  return showsStore.showsByTeam(userStore.currentTeam)
 })
 
-const allTeamShowDates = computed(() => {
-  return showsStore.showDates.filter(showDate => {
-    const show = showsStore.shows.find(s => s.id === showDate.show_id)
-    return show && show.team === userStore.currentTeam
-  })
-})
+const isSessionInPast = (sessionDate: string) => isPastDate(sessionDate)
 
-const isSessionInPast = (sessionDate: string) => {
-  const session = new Date(sessionDate)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return session < today // Only sessions before today are considered "past"
-}
-
-const attendanceMatrix = ref<any[]>([])
-const availabilityMatrix = ref<any[]>([])
-
-// Load matrix data with caching
-const matrixCache = ref<{ attendance: any[], availability: any[], timestamp: number } | null>(null)
-const matrixCacheDuration = 5 * 60 * 1000 // 5 minutes
+const attendanceMatrix = ref<{ userId: string; userName: string; team: string | null; sessions: { sessionId: string; date: string; status: string }[] }[]>([])
+const availabilityMatrix = ref<{ userId: string; userName: string; team: string | null; shows: { showId: string; showName: string; date: string; status: string }[] }[]>([])
 
 const loadMatrixData = async () => {
+  if (!userStore.currentTeam) return
   try {
-    // Check if we have cached matrix data
-    if (matrixCache.value && (Date.now() - matrixCache.value.timestamp) < matrixCacheDuration) {
-      attendanceMatrix.value = matrixCache.value.attendance
-      availabilityMatrix.value = matrixCache.value.availability
-      return
-    }
-    
-    // Use cached store data - don't force refresh
     const [attendanceResult, availabilityResult] = await Promise.all([
-      coachingStore.getAttendanceMatrix(userStore.currentTeam || 'Samurai'),
-      showsStore.getAvailabilityMatrix(userStore.currentTeam || 'Samurai')
+      coachingStore.getAttendanceMatrix(userStore.currentTeam),
+      showsStore.getAvailabilityMatrix(userStore.currentTeam),
     ])
-    
+
     if (attendanceResult.success) {
-      // Sort the matrix data by session date (oldest first)
-      attendanceMatrix.value = attendanceResult.matrix.map(member => ({
+      attendanceMatrix.value = attendanceResult.matrix.map((member) => ({
         ...member,
-        sessions: member.sessions.sort((a: any, b: any) => 
-          new Date(a.date).getTime() - new Date(b.date).getTime()
-        )
+        sessions: [...member.sessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
       }))
     }
-    
+
     if (availabilityResult.success) {
       availabilityMatrix.value = availabilityResult.matrix
-    }
-    
-    // Cache the matrix data
-    matrixCache.value = {
-      attendance: attendanceMatrix.value,
-      availability: availabilityMatrix.value,
-      timestamp: Date.now()
     }
   } catch (error) {
     console.error('Error loading matrix data:', error)
   }
 }
 
-// Refresh matrix data (for manual refresh)
 const refreshMatrixData = async () => {
-  // Clear matrix cache to force fresh data
-  matrixCache.value = null
   await loadMatrixData()
 }
 
-const availableMembers = ref<any[]>([])
+const availableMembers = ref<{ id: string; name: string; team: string | null }[]>([])
 
 const loadTeamMembers = async () => {
-  // Check if team members are cached for this team
-  const teamMembersCacheKey = `team_members_${userStore.currentTeam}`
-  const cachedTeamMembers = sessionStorage.getItem(teamMembersCacheKey)
-  
-  if (cachedTeamMembers) {
-    availableMembers.value = JSON.parse(cachedTeamMembers)
+  if (!userStore.currentTeam) {
+    availableMembers.value = []
     return
   }
-  
-  // Fetch team members if not cached
-  const teamMembersResult = await userStore.getUsersByTeam(userStore.currentTeam || 'Samurai')
+  const teamMembersResult = await userStore.getUsersByTeam(userStore.currentTeam)
   if (teamMembersResult.success) {
     availableMembers.value = teamMembersResult.users
-    // Cache the team members
-    sessionStorage.setItem(teamMembersCacheKey, JSON.stringify(teamMembersResult.users))
   }
 }
 
 const availableMembersForShow = computed(() => {
-  if (!selectedShowDate.value) return []
-  
-  return availableMembers.value.map(member => {
-    const availability = showsStore.getAvailabilityForUser(member.id, selectedShowDate.value.id)
-    return {
-      ...member,
-      availability
-    }
-  })
-})
+  if (!selectedShow.value) return []
 
-const selectedMembers = ref<string[]>([])
+  return availableMembers.value.map((member) => ({
+    ...member,
+    availability: showsStore.getAvailabilityForUser(member.id, selectedShow.value!.id),
+  }))
+})
 
 // Methods
 const formatDate = (dateStr: string) => {
   return format(parseISO(dateStr), 'MMM dd, yyyy')
 }
 
-const getStatusLabel = (status: string) => {
-  switch (status) {
-    case 'present': return 'Présent'
-    case 'absent': return 'Absent'
-    case 'undecided': return 'Indécis'
-    default: return 'Présent'
-  }
-}
+const getStatusLabel = (status: string) => ATTENDANCE_STATUS_LABELS[status] ?? ATTENDANCE_STATUS_LABELS.present
 
 const getAttendanceSummary = (memberId: string) => {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  
-  // Find the member in the attendance matrix
-  const member = attendanceMatrix.value.find(m => m.userId === memberId)
-  
+
+  const member = attendanceMatrix.value.find((m) => m.userId === memberId)
+
   if (!member) {
     return '0/0'
   }
-  
-  // Get all sessions up until today
-  const sessionsUpToToday = member.sessions.filter(session => {
+
+  const sessionsUpToToday = member.sessions.filter((session) => {
     const sessionDate = parseISO(session.date)
     return sessionDate <= today
   })
-  
-  // Count sessions where member was present
-  const presentCount = sessionsUpToToday.filter(session => {
-    return session.status === 'present'
-  }).length
-  
+
+  const presentCount = sessionsUpToToday.filter((session) => session.status === 'present').length
+
   return `${presentCount}/${sessionsUpToToday.length}`
 }
 
-const getShowDates = (showId: string) => {
-  return showsStore.datesByShow(showId)
-}
-
-const getAssignedMembers = (showDateId: string) => {
-  const members = showsStore.getAssignedMembers(showDateId)
-  return members || []
-}
-
-const getShowName = (showId: string) => {
-  const show = showsStore.shows.find(s => s.id === showId)
-  return show?.name || 'Unknown Show'
+const getAssignedMembers = (showId: string) => {
+  return showsStore.getAssignedMembers(showId) || []
 }
 
 const createCoachingSession = async () => {
-  if (!newCoachingDate.value || !newCoachingCoach.value) return
-  
+  if (!newCoachingDate.value || !newCoachingCoach.value || !userStore.currentTeam) return
+
   await coachingStore.createCoachingSession(
     newCoachingDate.value,
-    userStore.currentTeam || 'Samurai',
+    userStore.currentTeam,
     newCoachingCoach.value,
-    userStore.user?.id || ''
+    userStore.user?.id || '',
   )
-  
+
+  await refreshMatrixData()
+
   newCoachingDate.value = ''
   newCoachingCoach.value = ''
   showCreateCoachingModal.value = false
 }
 
 const createShow = async () => {
-  if (!newShow.value.name) return
-  
-  await showsStore.createShow(
-    newShow.value.name,
-    userStore.currentTeam || 'Samurai',
-    userStore.user?.id || ''
-  )
-  
-  newShow.value = { name: '' }
+  if (!newShow.value.name || !newShow.value.date || !userStore.currentTeam) return
+
+  await showsStore.createShow(newShow.value.name, userStore.currentTeam, newShow.value.date, userStore.user?.id || '')
+
+  await refreshMatrixData()
+
+  newShow.value = { name: '', date: '' }
   showCreateShowModal.value = false
 }
 
-const createShowDate = async () => {
-  if (!newShowDate.value.date || !selectedShow.value) return
-  
-  await showsStore.createShowDate(
-    selectedShow.value?.id || '',
-    newShowDate.value.date,
-    userStore.user?.id || ''
-  )
-  
-  // Refresh matrix data to reflect the new show date
-  await refreshMatrixData()
-  
-  newShowDate.value = { date: '' }
-  selectedShow.value = null
-  showCreateShowDateModal.value = false
-}
-
-const openUpdateShowDateModal = (show: any) => {
-  const showDate = getShowDates(show.id)[0]
-  if (showDate) {
-    selectedShow.value = show
-    selectedShowDate.value = showDate
-    updateShowDateData.value = {
-      date: showDate.date
-    }
-    showUpdateShowDateModal.value = true
-  }
-}
-
-const updateShowDate = async () => {
-  if (!updateShowDateData.value.date || !selectedShowDate.value) return
-  
-  await showsStore.updateShowDate(
-    selectedShowDate.value?.id || '',
-    updateShowDateData.value.date,
-    userStore.user?.id || ''
-  )
-  
-  // Refresh matrix data to reflect the update
-  await refreshMatrixData()
-  
-  updateShowDateData.value = { date: '' }
-  selectedShow.value = null
-  selectedShowDate.value = null
-  showUpdateShowDateModal.value = false
-}
-
 const deleteCoachingSession = async (sessionId: string) => {
-  if (confirm('Are you sure you want to delete this coaching session?')) {
+  if (confirm(CONFIRM_MESSAGES.deleteCoachingSession)) {
     const result = await coachingStore.deleteCoachingSession(sessionId)
-    
+
     if (!result.success) {
-      alert('Failed to delete coaching session: ' + result.error)
+      alert('Échec de la suppression : ' + result.error)
     }
   }
 }
 
-const openEditCoachModal = (session: any) => {
+const openEditCoachModal = (session: { id: string; coach: string }) => {
   editingSessionId.value = session.id
   editingCoach.value = session.coach
   showEditCoachModal.value = true
@@ -713,26 +528,13 @@ const updateCoachingSessionCoach = async () => {
     editingCoach.value = ''
     showEditCoachModal.value = false
   } else {
-    alert('Failed to update coach: ' + result.error)
+    alert('Échec de la mise à jour du coach : ' + result.error)
   }
 }
 
 const confirmDeleteShow = async (showId: string) => {
-  if (confirm('Are you sure you want to delete this show?')) {
+  if (confirm(CONFIRM_MESSAGES.deleteShow)) {
     await showsStore.deleteShow(showId)
-  }
-}
-
-const deleteShow = async (showId: string) => {
-  if (confirm('Are you sure you want to delete this show?')) {
-    await showsStore.deleteShow(showId)
-  }
-}
-
-const deleteShowDate = async (showDateId: string) => {
-  if (confirm('Are you sure you want to delete this show date?')) {
-    await showsStore.deleteShowDate(showDateId)
-    // Refresh matrix data to reflect the deleted show date
     await refreshMatrixData()
   }
 }
@@ -762,7 +564,7 @@ const confirmAttendanceUpdate = async () => {
     selectedEvent.value.userId,
     selectedEvent.value.sessionId,
     selectedAttendanceStatus.value,
-    userStore.user?.role
+    'captain',
   )
   
   if (!result.success) {
@@ -777,39 +579,24 @@ const confirmAttendanceUpdate = async () => {
   closeStatusModal()
 }
 
-const formatModalDate = (dateStr: string) => {
+const formatModalDate = (dateStr: string | undefined) => {
+  if (!dateStr) return ''
   return format(parseISO(dateStr), 'EEEE, MMMM dd, yyyy')
 }
 
-const toggleAttendance = async (userId: string, sessionId: string, currentStatus: string) => {
-  const nextStatus = getNextStatus(currentStatus)
-  const result = await coachingStore.updateAttendance(userId, sessionId, nextStatus, userStore.user?.role)
-  
-  if (!result.success) {
-    alert(result.error)
-  }
-}
-
-const toggleShowAvailability = async (userId: string, showDateId: string, currentStatus: string) => {
-  const nextStatus = getNextStatus(currentStatus)
-  await showsStore.updateAvailability(userId, showDateId, nextStatus)
-  // Refresh matrix data to reflect the availability update
-  await refreshMatrixData()
-}
-
-const getNextStatus = (currentStatus: string) => {
+const getNextStatus = (currentStatus: string): 'absent' | 'present' | 'undecided' => {
   if (currentStatus === 'absent') return 'present'
   if (currentStatus === 'present') return 'undecided'
   return 'absent'
 }
 
-
-
-const isMemberAssigned = (memberId: string) => {
-  if (!selectedShowDate.value) return false
-  const assignedMembers = getAssignedMembers(selectedShowDate.value.id)
-  return assignedMembers.includes(memberId)
+const toggleShowAvailability = async (userId: string, showId: string, currentStatus: string) => {
+  const nextStatus = getNextStatus(currentStatus)
+  await showsStore.updateAvailability(userId, showId, nextStatus, 'captain')
+  await refreshMatrixData()
 }
+
+const selectedMembers = ref<string[]>([])
 
 const toggleMemberAssignment = (memberId: string) => {
   const index = selectedMembers.value.indexOf(memberId)
@@ -820,63 +607,49 @@ const toggleMemberAssignment = (memberId: string) => {
   }
 }
 
-const openAssignMembersModal = (showDate: any) => {
-  selectedShowDate.value = showDate
-  initializeSelectedMembers()
+const openAssignMembersModal = (show: { id: string }) => {
+  selectedShow.value = show
+  selectedMembers.value = [...getAssignedMembers(show.id)]
   showAssignMembersModal.value = true
 }
 
-const initializeSelectedMembers = () => {
-  if (selectedShowDate.value) {
-    const assignedMembers = getAssignedMembers(selectedShowDate.value.id)
-    selectedMembers.value = [...assignedMembers]
-  }
-}
-
 const saveMemberAssignments = async () => {
-  if (!selectedShowDate.value) return
-  
-  // Get current assignments
-  const currentAssignments = getAssignedMembers(selectedShowDate.value.id)
-  
-  // Remove members that are no longer selected
+  if (!selectedShow.value) return
+
+  const currentAssignments = getAssignedMembers(selectedShow.value.id)
+
   for (const memberId of currentAssignments) {
     if (!selectedMembers.value.includes(memberId)) {
-      await showsStore.removeMemberFromShow(selectedShowDate.value.id, memberId)
+      await showsStore.removeMemberFromShow(selectedShow.value.id, memberId)
     }
   }
-  
-  // Add new assignments
+
   for (const memberId of selectedMembers.value) {
     if (!currentAssignments.includes(memberId)) {
-      await showsStore.assignMemberToShow(selectedShowDate.value.id, memberId)
+      await showsStore.assignMemberToShow(selectedShow.value.id, memberId)
     }
   }
-  
+
   selectedMembers.value = []
   showAssignMembersModal.value = false
 }
 
 onMounted(async () => {
-  if (!userStore.isAuthenticated || !userStore.isCaptain) {
+  if (!userStore.isAuthenticated || !userStore.isCaptain || !userStore.currentTeam) {
     router.push('/login')
     return
   }
 
-  // Check if stores have been initialized in this session
-  const storesInitialized = sessionStorage.getItem('stores_initialized')
-  
-  if (!storesInitialized) {
-    console.warn('⚠️ Stores not initialized, redirecting to login...')
-    router.push('/login')
-    return
-  }
-  
-  // Load team members and matrix data
   await Promise.all([
+    coachingStore.fetchCoachingSessions(userStore.currentTeam),
+    coachingStore.fetchAttendanceRecords(),
+    showsStore.fetchShows(userStore.currentTeam),
+    showsStore.fetchShowAssignments(),
+    showsStore.fetchShowAvailability(),
     loadTeamMembers(),
-    loadMatrixData()
   ])
+
+  await loadMatrixData()
 })
 </script>
 

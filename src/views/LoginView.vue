@@ -65,17 +65,6 @@
         </div>
 
         <div class="form-group">
-          <label for="register-email">Email</label>
-          <input
-            id="register-email"
-            v-model="registerForm.email"
-            type="email"
-            required
-            placeholder="Entrez votre email"
-          />
-        </div>
-        
-        <div class="form-group">
           <label for="register-password">Mot de passe</label>
           <input
             id="register-password"
@@ -123,7 +112,7 @@
         
         <p>Conformément au Règlement Général sur la Protection des Données (RGPD), nous vous informons que les données personnelles collectées lors de votre inscription sont traitées dans le cadre de la gestion de votre compte utilisateur et de l'utilisation de notre plateforme de gestion d'équipe.</p>
 
-        <p><strong>Données collectées :</strong> Nom, adresse e-mail, mot de passe (haché), équipe d'appartenance, rôle dans l'équipe, présence aux entraînements, présence aux spectacles.</p>
+        <p><strong>Données collectées :</strong> Nom, mot de passe (haché), équipe d'appartenance, rôle dans l'équipe, présence aux entraînements, présence aux spectacles.</p>
 
         <p><strong>Finalités du traitement :</strong> Gestion de votre compte, authentification, communication au sein de l'équipe, organisation des entraînements et événements.</p>
 
@@ -146,13 +135,9 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { useCoachingStore } from '@/stores/coaching'
-import { useShowsStore } from '@/stores/shows'
 
 const router = useRouter()
 const userStore = useUserStore()
-const coachingStore = useCoachingStore()
-const showsStore = useShowsStore()
 
 const activeTab = ref<'login' | 'register'>('login')
 const isLoading = ref(false)
@@ -166,7 +151,6 @@ const loginForm = reactive({
 
 const registerForm = reactive({
   name: '',
-  email: '',
   password: '',
   confirmPassword: '',
   acceptTerms: false
@@ -178,33 +162,13 @@ const handleLogin = async () => {
 
   try {
     const result = await userStore.login(loginForm.name, loginForm.password)
-    
+
     if (result.success) {
-      // Initialize stores after successful login
-      console.log('🔄 Initializing stores after login...')
-      await Promise.all([
-        coachingStore.fetchCoachingSessions(undefined, true),
-        coachingStore.fetchAttendanceRecords(undefined, true),
-        showsStore.fetchShows(true),
-        showsStore.fetchShowDates(true),
-        showsStore.fetchShowAssignments(true),
-        showsStore.fetchShowAvailability(true)
-      ])
-      
-      // Cache team members for the user's team
-      const teamMembersResult = await userStore.getUsersByTeam(userStore.currentTeam || 'Samurai')
-      if (teamMembersResult.success) {
-        const teamMembersCacheKey = `team_members_${userStore.currentTeam}`
-        sessionStorage.setItem(teamMembersCacheKey, JSON.stringify(teamMembersResult.users))
-      }
-      
-      sessionStorage.setItem('stores_initialized', 'true')
-      
       router.push('/dashboard')
     } else {
       loginError.value = result.error || 'Échec de la connexion'
     }
-  } catch (error) {
+  } catch {
     loginError.value = 'Une erreur s\'est produite lors de la connexion'
   } finally {
     isLoading.value = false
@@ -221,38 +185,14 @@ const handleRegister = async () => {
   registerError.value = ''
 
   try {
-    const result = await userStore.register(
-      registerForm.name,
-      registerForm.email,
-      registerForm.password
-    )
-    
+    const result = await userStore.register(registerForm.name, registerForm.password)
+
     if (result.success) {
-      // Initialize stores after successful registration
-      console.log('🔄 Initializing stores after registration...')
-      await Promise.all([
-        coachingStore.fetchCoachingSessions(undefined, true),
-        coachingStore.fetchAttendanceRecords(undefined, true),
-        showsStore.fetchShows(true),
-        showsStore.fetchShowDates(true),
-        showsStore.fetchShowAssignments(true),
-        showsStore.fetchShowAvailability(true)
-      ])
-      
-      // Cache team members for the user's team
-      const teamMembersResult = await userStore.getUsersByTeam(userStore.currentTeam || 'Samurai')
-      if (teamMembersResult.success) {
-        const teamMembersCacheKey = `team_members_${userStore.currentTeam}`
-        sessionStorage.setItem(teamMembersCacheKey, JSON.stringify(teamMembersResult.users))
-      }
-      
-      sessionStorage.setItem('stores_initialized', 'true')
-      
       router.push('/dashboard')
     } else {
-      registerError.value = 'Échec de l\'inscription'
+      registerError.value = result.error || 'Échec de l\'inscription'
     }
-  } catch (error) {
+  } catch {
     registerError.value = 'Une erreur s\'est produite lors de l\'inscription'
   } finally {
     isLoading.value = false
