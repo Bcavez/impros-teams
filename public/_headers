@@ -1,0 +1,7 @@
+# /sw.js only exists to unregister the service worker left by the old PWA build, so it must never
+# be served from cache — a stale copy would keep the old worker alive on the very devices it is
+# meant to free. Same for index.html, which is the entry point to the hashed asset graph.
+/sw.js
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
