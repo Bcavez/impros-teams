@@ -1,0 +1,3 @@
+# SPA fallback: serve index.html for all paths so Vue Router can handle them.
+# Without this, refreshing /dashboard (or arriving there directly) 404s on Netlify.
+/*    /index.html   200
