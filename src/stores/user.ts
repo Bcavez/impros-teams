@@ -165,8 +165,12 @@ export const useUserStore = defineStore('user', () => {
       return { success: false, error: error.message }
     }
 
+    // `must_change_password` is admin-/system-only (spec.md §7.1): there is no self-service
+    // profile write, so we don't (and, under RLS, can't) update it from the client. A
+    // SECURITY DEFINER trigger on auth.users (019_reset_must_change_password_on_password_change.sql)
+    // clears it server-side as soon as the password actually changes above; mirror that here so
+    // the UI doesn't keep forcing the "Mon compte" modal open for the rest of this session.
     if (user.value.must_change_password) {
-      await supabase.from('profiles').update({ must_change_password: false }).eq('id', user.value.id)
       user.value = { ...user.value, must_change_password: false }
     }
 

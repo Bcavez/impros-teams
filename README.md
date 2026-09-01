@@ -59,9 +59,11 @@ spec-conformance test suite (`npm test`).
    "Confirm email"**. Accounts use a synthetic `@impros.local` address that can't receive mail, so
    with confirmation on, `signUp` never returns a session and registration silently breaks.
 
-4. Apply the database schema: run `supabase/migrations/017_target_baseline.sql` then
-   `supabase/migrations/018_rls_and_triggers.sql` via the Supabase SQL editor or CLI. Older
-   migrations live under `supabase/migrations/archive/` for history only — do not apply them.
+4. Apply the database schema: run `supabase/migrations/017_target_baseline.sql`, then
+   `supabase/migrations/018_rls_and_triggers.sql`, then
+   `supabase/migrations/019_reset_must_change_password_on_password_change.sql`, in order, via the
+   Supabase SQL editor or CLI. Older migrations live under `supabase/migrations/archive/` for
+   history only — do not apply them.
 
 5. Optionally seed a season's recurring coaching sessions with
    `supabase/seed-coaching-sessions.sql` (idempotent — safe to re-run).
