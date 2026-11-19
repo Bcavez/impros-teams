@@ -4,6 +4,7 @@ import LoginView from '../views/LoginView.vue'
 import TeamDashboardView from '../views/TeamDashboardView.vue'
 import CaptainDashboardView from '../views/CaptainDashboardView.vue'
 import AdminUserManagementView from '../views/AdminUserManagementView.vue'
+import DomsDashboardView from '../views/DomsDashboardView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -35,6 +36,12 @@ const router = createRouter({
       name: 'captain',
       component: CaptainDashboardView,
       meta: { requiresAuth: true, requiresCaptain: true }
+    },
+    {
+      path: '/doms',
+      name: 'doms',
+      component: DomsDashboardView,
+      meta: { requiresAuth: true, requiresDoms: true }
     }
   ],
 })
@@ -53,6 +60,18 @@ router.beforeEach(async (to, from, next) => {
     return
   }
   
+  // A doms sees nothing but /doms (spec-doms.md §5.4)
+  if (userStore.isAuthenticated && userStore.isDoms && to.path !== '/doms') {
+    next('/doms')
+    return
+  }
+
+  // Only a doms may enter /doms
+  if (to.meta.requiresDoms && !userStore.isDoms) {
+    next('/dashboard')
+    return
+  }
+
   // Check if route requires admin access
   if (to.meta.requiresAdmin && !userStore.isAdmin) {
     next('/dashboard')

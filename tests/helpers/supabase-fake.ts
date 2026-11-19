@@ -347,12 +347,105 @@ export class FakeSupabaseDatabase {
   from(table: string) {
     return new QueryBuilder(this, table)
   }
+
+  /**
+   * Fake of the doms RPCs (supabase/migrations/020_doms_additive.sql), implemented over the fake
+   * tables. The caller is `auth.currentUser`; like the SQL functions, only a doms may write.
+   */
+  rpc(name: string, args: Record<string, unknown>) {
+    return Promise.resolve().then(() => {
+      const fail = (message: string) => ({ data: null, error: new FakeQueryError(message) })
+      const callerId = this.auth.currentUser?.id
+      const caller = this.rows('profiles').find((p) => p.id === callerId)
+      const callerIsDoms = ((caller?.roles as string[] | undefined) ?? []).includes('doms')
+      const profiles = this.rows('profiles')
+
+      if (name === 'create_doms_show') {
+        if (!callerIsDoms) return fail('Only doms can create doms shows')
+        const teams = [...new Set(args.p_teams as string[])]
+        if (teams.length === 0) return fail('At least one target team is required')
+        if (!(args.p_name as string)?.trim()) return fail('Name and date are required')
+        const id = `doms_shows-${this.rows('doms_shows').length + 1}`
+        this.rows('doms_shows').push({
+          id,
+          name: (args.p_name as string).trim(),
+          date: args.p_date,
+          created_by: callerId,
+          created_at: new Date().toISOString(),
+        })
+        for (const team of teams) this.rows('doms_show_teams').push({ show_id: id, team })
+        for (const p of profiles.filter((p) => teams.includes(p.team as string))) {
+          this.rows('doms_show_availability').push({
+            id: `doms_show_availability-${this.rows('doms_show_availability').length + 1}`,
+            user_id: p.id,
+            show_id: id,
+            status: 'undecided',
+          })
+        }
+        return { data: id, error: null }
+      }
+
+      if (name === 'update_doms_show') {
+        if (!callerIsDoms) return fail('Only doms can update doms shows')
+        const showId = args.p_show_id as string
+        const show = this.rows('doms_shows').find((s) => s.id === showId)
+        if (!show) return fail('Doms show not found')
+        const teams = [...new Set(args.p_teams as string[])]
+        if (teams.length === 0) return fail('At least one target team is required')
+        show.name = (args.p_name as string).trim()
+        show.date = args.p_date
+        const current = this.rows('doms_show_teams').filter((t) => t.show_id === showId).map((t) => t.team as string)
+        const removed = current.filter((t) => !teams.includes(t))
+        const added = teams.filter((t) => !current.includes(t))
+        const inTeams = (userId: unknown, list: string[]) =>
+          list.includes(profiles.find((p) => p.id === userId)?.team as string)
+        for (const table of ['doms_show_availability', 'doms_show_assignments']) {
+          this.table(table).rows = this.rows(table).filter(
+            (r) => !(r.show_id === showId && inTeams(r.user_id, removed)),
+          )
+        }
+        this.table('doms_show_teams').rows = this.rows('doms_show_teams').filter(
+          (t) => !(t.show_id === showId && removed.includes(t.team as string)),
+        )
+        for (const team of added) this.rows('doms_show_teams').push({ show_id: showId, team })
+        for (const p of profiles.filter((p) => added.includes(p.team as string))) {
+          const exists = this.rows('doms_show_availability').some((r) => r.show_id === showId && r.user_id === p.id)
+          if (!exists) {
+            this.rows('doms_show_availability').push({
+              id: `doms_show_availability-${this.rows('doms_show_availability').length + 1}`,
+              user_id: p.id,
+              show_id: showId,
+              status: 'undecided',
+            })
+          }
+        }
+        return { data: null, error: null }
+      }
+
+      if (name === 'doms_show_cast') {
+        const showId = args.p_show_id as string
+        const targets = this.rows('doms_show_teams').filter((t) => t.show_id === showId).map((t) => t.team as string)
+        const allowed = callerIsDoms || targets.includes(caller?.team as string)
+        const cast = allowed
+          ? this.rows('doms_show_assignments')
+              .filter((a) => a.show_id === showId)
+              .map((a) => profiles.find((p) => p.id === a.user_id))
+              .filter((p) => p && targets.includes(p.team as string))
+              .map((p) => ({ user_id: p!.id, name: p!.name, team: p!.team }))
+          : []
+        return { data: cast, error: null }
+      }
+
+      return fail(`FakeSupabaseDatabase: unknown rpc "${name}"`)
+    })
+  }
 }
 
 export function createFakeSupabaseClient(db = new FakeSupabaseDatabase()) {
   return {
     db,
     from: (table: string) => db.from(table),
+    rpc: (name: string, args: Record<string, unknown>) => db.rpc(name, args),
     auth: db.auth,
   }
 }

@@ -73,3 +73,34 @@ export function canEditPastEvent(user: PermissionUser, event: DatedEvent): boole
   if (!isPastDate(event.date)) return true
   return isCaptain(user)
 }
+
+// --- Doms (spec-doms.md §4.3). Additions only; the predicates above are unchanged. ---
+
+export interface DomsShowScoped {
+  date: string
+  teams: string[]
+}
+
+export function isDoms(user: PermissionUser): boolean {
+  return user.roles.includes('doms')
+}
+
+export function canManageDomsShow(user: PermissionUser): boolean {
+  return isDoms(user)
+}
+
+/** The target must be on one of the show's teams; then self, or a doms. */
+export function canSetDomsAvailabilityFor(
+  actor: PermissionUser,
+  target: { id: string; team: string | null },
+  show: DomsShowScoped,
+): boolean {
+  if (!target.team || !show.teams.includes(target.team)) return false
+  return actor.id === target.id || isDoms(actor)
+}
+
+/** Past doms shows can only be edited by a doms; everyone else is locked out (spec-doms.md §4.1). */
+export function canEditPastDomsShow(user: PermissionUser, show: { date: string }): boolean {
+  if (!isPastDate(show.date)) return true
+  return isDoms(user)
+}

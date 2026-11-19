@@ -67,6 +67,7 @@
                 <option value="admin">Admin</option>
                 <option value="captain">Capitaine</option>
                 <option value="member">Membre</option>
+                <option value="doms">{{ DOMS_LABELS.role }}</option>
               </select>
               <select v-model="teamFilter" class="filter-select">
                 <option value="">Toutes les équipes</option>
@@ -93,9 +94,10 @@
                     <select
                       :value="roleOf(user)"
                       @change="updateUserRole(user, ($event.target as HTMLSelectElement).value as 'member' | 'captain')"
-                      :disabled="user.id === currentUser?.id"
+                      :disabled="user.id === currentUser?.id || roleOf(user) === 'doms'"
                       class="role-select"
                     >
+                      <option v-if="roleOf(user) === 'doms'" value="doms">{{ DOMS_LABELS.role }}</option>
                       <option value="member">Membre</option>
                       <option value="captain">Capitaine</option>
                     </select>
@@ -104,6 +106,7 @@
                     <select
                       :value="user.team ?? ''"
                       @change="updateUserTeam(user, ($event.target as HTMLSelectElement).value)"
+                      :disabled="roleOf(user) === 'doms'"
                       class="team-select"
                     >
                       <option value="">Aucune équipe</option>
@@ -138,6 +141,7 @@ import { useRouter } from 'vue-router'
 import { useUserStore, type Profile } from '@/stores/user'
 import { format } from 'date-fns'
 import { TEAMS, type Team } from '@/lib/teams'
+import { DOMS_LABELS } from '@/lib/strings'
 import MainNavigation from '@/components/MainNavigation.vue'
 
 const router = useRouter()
@@ -156,7 +160,8 @@ const teamFilter = ref('')
 const users = computed(() => userStore.allUsers)
 const currentUser = computed(() => userStore.user)
 
-const roleOf = (user: Profile): 'admin' | 'captain' | 'member' => {
+const roleOf = (user: Profile): 'admin' | 'captain' | 'member' | 'doms' => {
+  if (user.roles.includes('doms')) return 'doms'
   if (user.roles.includes('admin')) return 'admin'
   if (user.roles.includes('captain')) return 'captain'
   return 'member'
@@ -164,7 +169,7 @@ const roleOf = (user: Profile): 'admin' | 'captain' | 'member' => {
 
 const adminCount = computed(() => users.value.filter((u) => u.roles.includes('admin')).length)
 const captainCount = computed(() => users.value.filter((u) => u.roles.includes('captain')).length)
-const memberCount = computed(() => users.value.filter((u) => !u.roles.includes('captain') && !u.roles.includes('admin')).length)
+const memberCount = computed(() => users.value.filter((u) => !u.roles.includes('captain') && !u.roles.includes('admin') && !u.roles.includes('doms')).length)
 
 const filteredUsers = computed(() => {
   let filtered = users.value

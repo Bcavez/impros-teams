@@ -25,6 +25,10 @@ function seedDefaultSchema(db: FakeSupabaseDatabase) {
   db.defineTable('shows', [])
   db.defineTable('show_assignments', [], [['show_id', 'user_id']])
   db.defineTable('show_availability', [], [['user_id', 'show_id']])
+  db.defineTable('doms_shows', [])
+  db.defineTable('doms_show_teams', [], [['show_id', 'team']])
+  db.defineTable('doms_show_availability', [], [['user_id', 'show_id']])
+  db.defineTable('doms_show_assignments', [], [['show_id', 'user_id']])
 }
 
 /** Deep-enough clone so mutating a fetched row never leaks back into the shared fixture object. */
@@ -39,6 +43,10 @@ export function resetFakeDb(overrides: Partial<Record<string, Row[]>> = {}) {
   fakeDb.rows('shows').push(...clone(overrides.shows ?? ALL_SHOWS))
   fakeDb.rows('show_assignments').push(...clone(overrides.show_assignments ?? SHOW_ASSIGNMENTS))
   fakeDb.rows('show_availability').push(...clone(overrides.show_availability ?? SHOW_AVAILABILITY))
+  fakeDb.rows('doms_shows').push(...clone(overrides.doms_shows ?? []))
+  fakeDb.rows('doms_show_teams').push(...clone(overrides.doms_show_teams ?? []))
+  fakeDb.rows('doms_show_availability').push(...clone(overrides.doms_show_availability ?? []))
+  fakeDb.rows('doms_show_assignments').push(...clone(overrides.doms_show_assignments ?? []))
   fakeDb.auth.reset()
 }
 

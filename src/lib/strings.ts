@@ -21,6 +21,16 @@ export const NAV_LABELS = {
   refreshing: 'Actualisation...',
 }
 
+export const DOMS_LABELS = {
+  role: 'Doms',
+  notApplicable: 'N/A',
+  title: 'Tableau de Bord Doms',
+  createShow: 'Créer un Spectacle',
+  showAll: 'Voir tout',
+  showUpcomingOnly: 'Voir moins',
+  past: '(Passé)',
+}
+
 export const VALIDATION_MESSAGES = {
   passwordsDoNotMatch: 'Les mots de passe ne correspondent pas',
   noUserLoggedIn: 'Aucun utilisateur connecté',

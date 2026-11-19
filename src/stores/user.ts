@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { syntheticEmail } from '@/lib/auth-identity'
 import { validatePassword } from '@/lib/password-policy'
-import { isAdmin as checkIsAdmin, isCaptain as checkIsCaptain } from '@/lib/permissions'
+import { isAdmin as checkIsAdmin, isCaptain as checkIsCaptain, isDoms as checkIsDoms } from '@/lib/permissions'
 import type { Team } from '@/lib/teams'
 
 export interface Profile {
@@ -25,6 +25,7 @@ export const useUserStore = defineStore('user', () => {
 
   const isAdmin = computed(() => (user.value ? checkIsAdmin(user.value) : false))
   const isCaptain = computed(() => (user.value ? checkIsCaptain(user.value) : false))
+  const isDoms = computed(() => (user.value ? checkIsDoms(user.value) : false))
   const canAccessAdmin = computed(() => isAdmin.value)
   const currentTeam = computed(() => user.value?.team ?? null)
 
@@ -184,6 +185,11 @@ export const useUserStore = defineStore('user', () => {
       return { success: false, error: 'Seuls les administrateurs peuvent assigner une équipe' }
     }
 
+    const teamTarget = allUsers.value.find((u) => u.id === userId) ?? (await fetchProfile(userId))
+    if (teamTarget && checkIsDoms(teamTarget)) {
+      return { success: false, error: 'Un compte Doms ne peut pas être assigné à une équipe' }
+    }
+
     try {
       const { error } = await supabase.from('profiles').update({ team }).eq('id', userId)
       if (error) {
@@ -205,6 +211,9 @@ export const useUserStore = defineStore('user', () => {
     }
 
     const target = allUsers.value.find((u) => u.id === userId) ?? (await fetchProfile(userId))
+    if (target && checkIsDoms(target)) {
+      return { success: false, error: 'Le rôle Doms ne peut pas être modifié depuis cette interface' }
+    }
     if (role === 'captain' && !target?.team) {
       return {
         success: false,
@@ -301,6 +310,7 @@ export const useUserStore = defineStore('user', () => {
     // Computed
     isAdmin,
     isCaptain,
+    isDoms,
     canAccessAdmin,
     currentTeam,
 

@@ -29,3 +29,6 @@ coverage
 
 *.tsbuildinfo
 .env*
+
+# Database dumps contain personal data
+backups/

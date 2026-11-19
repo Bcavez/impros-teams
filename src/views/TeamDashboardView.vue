@@ -22,25 +22,34 @@
         <div v-else class="shows-list">
           <div
             v-for="show in displayedShows"
-            :key="show.id"
+            :key="show.key"
             :class="['show-card', { 'past-event': isPastEvent(show.date) }]"
             @click="openShowModal(show)"
           >
             <div class="show-info">
-              <h3>{{ show.name }}</h3>
+              <h3>
+                {{ show.name }}
+                <template v-if="show.kind === 'doms'">
+                  <span
+                    v-for="team in show.teams"
+                    :key="team"
+                    :class="['doms-badge', `doms-badge-${team.toLowerCase()}`]"
+                  >{{ team }}</span>
+                </template>
+              </h3>
               <p class="show-date">{{ formatDate(show.date) }}</p>
               <p class="show-members">
                 <span class="members-label">Assignés : </span>
-                <span v-if="getAssignedMembers(show.id).length > 0">
-                  {{ getMemberNames(getAssignedMembers(show.id)).join(', ') }}
+                <span v-if="getCastNames(show).length > 0">
+                  {{ getCastNames(show).join(', ') }}
                 </span>
                 <span v-else class="no-members">Aucun membre assigné</span>
-                <span class="member-count">({{ getAssignedMembers(show.id).length }}/{{ show.max_cast }})</span>
+                <span class="member-count">({{ getCastCountLabel(show) }})</span>
               </p>
             </div>
             <div class="show-status">
-              <span :class="['status-badge', `status-${getShowStatus(show.id)}`]">
-                {{ getStatusLabel(getShowStatus(show.id)) }}
+              <span :class="['status-badge', `status-${getShowStatusFor(show)}`]">
+                {{ getStatusLabel(getShowStatusFor(show)) }}
               </span>
             </div>
           </div>
@@ -203,15 +212,26 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useCoachingStore } from '@/stores/coaching'
 import { useShowsStore } from '@/stores/shows'
+import { useDomsShowsStore } from '@/stores/domsShows'
 import { format, parseISO } from 'date-fns'
 import { isPastDate } from '@/lib/permissions'
 import { ATTENDANCE_STATUS_LABELS } from '@/lib/strings'
+import { TEAMS, type Team } from '@/lib/teams'
+import type { Database } from '@/lib/supabase'
+import {
+  fetchDomsShows,
+  fetchDomsShowTeams,
+  fetchDomsAvailability,
+  fetchDomsAssignments,
+  fetchDomsCast,
+} from '@/queries/doms'
 import MainNavigation from '@/components/MainNavigation.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
 const coachingStore = useCoachingStore()
 const showsStore = useShowsStore()
+const domsStore = useDomsShowsStore()
 
 // Toggle states
 const showAllShows = ref(false)
@@ -219,23 +239,59 @@ const showAllCoaching = ref(false)
 
 // Modal state
 const showStatusModal = ref(false)
-const selectedEvent = ref<{ type: 'coaching' | 'show'; date: string; title: string; sessionId?: string; showId?: string } | null>(null)
+const selectedEvent = ref<{ type: 'coaching' | 'show'; date: string; title: string; sessionId?: string; showId?: string; showKind?: 'captain' | 'doms' } | null>(null)
 const selectedCoachingStatus = ref<'present' | 'absent' | 'undecided'>('present')
 const selectedShowStatus = ref<'present' | 'absent' | 'undecided'>('present')
 
-// Get upcoming shows (include today and future dates) for the member's own team
-const upcomingShows = computed(() => {
-  return showsStore.shows
-    .filter((show) => show.team === userStore.currentTeam && !isPastDate(show.date))
-    .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
+// Doms shows targeting the member's team (spec-doms.md §5.1). Loaded separately so a failure
+// here (e.g. doms tables not deployed yet) never affects the regular shows.
+type DomsShowRow = Database['public']['Tables']['doms_shows']['Row']
+const domsShowRows = ref<DomsShowRow[]>([])
+const domsShowTeams = ref<{ show_id: string; team: Team }[]>([])
+const domsAvailability = ref<{ user_id: string; show_id: string; status: string }[]>([])
+const domsAssignments = ref<{ user_id: string; show_id: string }[]>([])
+const domsCastNames = ref<Record<string, string[]>>({})
+
+interface MemberShow {
+  key: string
+  kind: 'captain' | 'doms'
+  id: string
+  name: string
+  date: string
+  teams: Team[]
+  max_cast: number | null
+}
+
+// Regular + doms shows for the member's own team, merged and sorted by date
+const memberShows = computed<MemberShow[]>(() => {
+  const captain = showsStore.shows
+    .filter((show) => show.team === userStore.currentTeam)
+    .map<MemberShow>((show) => ({
+      key: `captain|${show.id}`,
+      kind: 'captain',
+      id: show.id,
+      name: show.name,
+      date: show.date,
+      teams: [show.team],
+      max_cast: show.max_cast,
+    }))
+  const doms = domsShowRows.value.map<MemberShow>((show) => ({
+    key: `doms|${show.id}`,
+    kind: 'doms',
+    id: show.id,
+    name: show.name,
+    date: show.date,
+    teams: TEAMS.filter((t) => domsShowTeams.value.some((dt) => dt.show_id === show.id && dt.team === t)),
+    max_cast: null,
+  }))
+  return [...captain, ...doms].sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
 })
 
+// Get upcoming shows (include today and future dates) for the member's own team
+const upcomingShows = computed(() => memberShows.value.filter((show) => !isPastDate(show.date)))
+
 // Get all shows for the team (both past and future)
-const allShows = computed(() => {
-  return showsStore.shows
-    .filter((show) => show.team === userStore.currentTeam)
-    .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
-})
+const allShows = computed(() => memberShows.value)
 
 // Get upcoming coaching sessions (include today and future dates)
 const upcomingCoaching = computed(() => {
@@ -345,6 +401,53 @@ const getShowStatus = (showId: string) => {
   return showsStore.getAvailabilityForUser(userStore.user?.id || '', showId)
 }
 
+const getShowStatusFor = (show: MemberShow): string => {
+  if (show.kind === 'captain') return getShowStatus(show.id)
+  const record = domsAvailability.value.find((r) => r.user_id === userStore.user?.id && r.show_id === show.id)
+  return record?.status ?? 'undecided'
+}
+
+const getCastNames = (show: MemberShow): string[] => {
+  if (show.kind === 'captain') return getMemberNames(getAssignedMembers(show.id))
+  return domsCastNames.value[show.id] ?? []
+}
+
+// Doms shows are uncapped, so they show a plain count instead of n/max
+const getCastCountLabel = (show: MemberShow): string => {
+  const count =
+    show.kind === 'captain'
+      ? getAssignedMembers(show.id).length
+      : domsAssignments.value.filter((a) => a.show_id === show.id).length
+  return show.kind === 'captain' ? `${count}/${show.max_cast}` : `${count}`
+}
+
+const loadDomsShows = async () => {
+  if (!userStore.currentTeam) return
+  try {
+    const [shows, teams, availability, assignments] = await Promise.all([
+      fetchDomsShows(userStore.currentTeam),
+      fetchDomsShowTeams(),
+      fetchDomsAvailability(),
+      fetchDomsAssignments(),
+    ])
+    domsShowRows.value = shows
+    domsShowTeams.value = teams
+    domsAvailability.value = availability
+    domsAssignments.value = assignments
+
+    const names: Record<string, string[]> = {}
+    await Promise.all(
+      shows.map(async (show) => {
+        names[show.id] = (await fetchDomsCast(show.id)).map((m) => m.name)
+      }),
+    )
+    domsCastNames.value = names
+  } catch (error) {
+    domsShowRows.value = []
+    console.error('Error loading doms shows:', error)
+  }
+}
+
 const getCoachingStatus = (sessionId: string) => {
   return coachingStore.getAttendanceForUser(userStore.user?.id || '', sessionId)
 }
@@ -352,14 +455,15 @@ const getCoachingStatus = (sessionId: string) => {
 const getStatusLabel = (status: string) => ATTENDANCE_STATUS_LABELS[status] ?? ATTENDANCE_STATUS_LABELS.present
 
 // Modal functions
-const openShowModal = (show: { id: string; date: string; name: string }) => {
+const openShowModal = (show: MemberShow) => {
   selectedEvent.value = {
     type: 'show',
     date: show.date,
     title: show.name,
     showId: show.id,
+    showKind: show.kind,
   }
-  selectedShowStatus.value = getShowStatus(show.id) as 'present' | 'absent' | 'undecided'
+  selectedShowStatus.value = getShowStatusFor(show) as 'present' | 'absent' | 'undecided'
   showStatusModal.value = true
 }
 
@@ -404,6 +508,21 @@ const confirmStatusUpdate = async () => {
       alert(result.error)
       return
     }
+  } else if (
+    selectedEvent.value.type === 'show' &&
+    selectedEvent.value.showId &&
+    selectedEvent.value.showKind === 'doms'
+  ) {
+    const result = await domsStore.setDomsAvailability(
+      userStore.user?.id || '',
+      selectedEvent.value.showId,
+      selectedShowStatus.value,
+    )
+    if (!result.success) {
+      alert(result.error)
+      return
+    }
+    await loadDomsShows()
   } else if (selectedEvent.value.type === 'show' && selectedEvent.value.showId) {
     await showsStore.updateAvailability(
       userStore.user?.id || '',
@@ -445,6 +564,8 @@ onMounted(async () => {
   } catch (error) {
     console.error('Error loading dashboard data:', error)
   }
+
+  await loadDomsShows()
 })
 
 // Watch for changes in the next coaching session and update the attendance matrix
@@ -1045,5 +1166,25 @@ watch(nextCoachingSession, async () => {
   .confirm-button {
     width: 100%;
   }
+}
+.doms-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #667eea;
+  color: white;
+  font-size: 11px;
+  font-weight: 500;
+  vertical-align: middle;
+}
+.doms-badge-samurai {
+  background: #27ae60;
+}
+.doms-badge-gladiator {
+  background: #e74c3c;
+}
+.doms-badge-viking {
+  background: #3498db;
 }
 </style> 

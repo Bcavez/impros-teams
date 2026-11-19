@@ -2,7 +2,7 @@
   <nav v-if="userStore.isAuthenticated" class="main-nav">
     <div class="nav-container">
       <div class="nav-left">
-        <router-link to="/dashboard" class="nav-brand">
+        <router-link :to="userStore.isDoms ? '/doms' : '/dashboard'" class="nav-brand">
           Team Dashboard
         </router-link>
       </div>
@@ -10,7 +10,16 @@
       <div class="nav-right">
         <div class="user-info">
           <span class="user-name">{{ userStore.user?.name }}</span>
-          <span class="team-badge">{{ userStore.currentTeam || 'Aucune équipe' }}</span>
+          <span
+            :class="[
+              'team-badge',
+              !userStore.isDoms && userStore.currentTeam
+                ? `team-badge--${userStore.currentTeam.toLowerCase()}`
+                : '',
+            ]"
+            >{{
+            userStore.isDoms ? DOMS_LABELS.role : userStore.currentTeam || 'Aucune équipe'
+          }}</span>
         </div>
         
         <div class="nav-actions">
@@ -41,7 +50,7 @@
           
           <!-- Back to Dashboard button (when not on dashboard) -->
           <router-link
-            v-if="!isOnDashboardPage"
+            v-if="!isOnDashboardPage && !userStore.isDoms"
             to="/dashboard"
             class="nav-button dashboard-button"
           >
@@ -127,7 +136,7 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { queryClient } from '@/lib/query-client'
-import { NAV_LABELS } from '@/lib/strings'
+import { NAV_LABELS, DOMS_LABELS } from '@/lib/strings'
 import AccountModal from '@/components/AccountModal.vue'
 
 const userStore = useUserStore()
@@ -242,6 +251,18 @@ const handleLogout = async () => {
   border-radius: 12px;
   font-size: 0.8em;
   font-weight: 500;
+}
+
+.team-badge--samurai {
+  background: #27ae60;
+}
+
+.team-badge--gladiator {
+  background: #e74c3c;
+}
+
+.team-badge--viking {
+  background: #3498db;
 }
 
 .nav-actions {

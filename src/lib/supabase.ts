@@ -171,12 +171,106 @@ export interface Database {
         }
         Relationships: []
       }
+      doms_shows: {
+        Row: {
+          id: string
+          name: string
+          date: string
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          date: string
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          date?: string
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      doms_show_teams: {
+        Row: {
+          show_id: string
+          team: Team
+        }
+        Insert: {
+          show_id: string
+          team: Team
+        }
+        Update: {
+          show_id?: string
+          team?: Team
+        }
+        Relationships: []
+      }
+      doms_show_availability: {
+        Row: {
+          id: string
+          user_id: string
+          show_id: string
+          status: AttendanceStatus
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          show_id: string
+          status?: AttendanceStatus
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          show_id?: string
+          status?: AttendanceStatus
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      doms_show_assignments: {
+        Row: {
+          id: string
+          show_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          show_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          show_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     // A string index signature here (e.g. `Record<string, never>`) would poison every
     // intersection with `Tables` in postgrest-js's `TablesAndViews` helper, collapsing every
     // table to `never` — mirror the Supabase CLI's own generated-types convention instead.
     Views: { [_ in never]: never }
-    Functions: { [_ in never]: never }
+    Functions: {
+      create_doms_show: {
+        Args: { p_name: string; p_date: string; p_teams: string[] }
+        Returns: string
+      }
+      update_doms_show: {
+        Args: { p_show_id: string; p_name: string; p_date: string; p_teams: string[] }
+        Returns: undefined
+      }
+      doms_show_cast: {
+        Args: { p_show_id: string }
+        Returns: { user_id: string; name: string; team: string }[]
+      }
+    }
     Enums: { [_ in never]: never }
     CompositeTypes: { [_ in never]: never }
   }
